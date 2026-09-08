@@ -31,7 +31,8 @@ jobs:
           echo '92c790a612db14fc60d6e8893f80efec2a934db769ceaf77b1f50fe18e50357a  '"$RUNNER_TEMP/project.tar.gz" | sha256sum -c -
           tar -tzf "$RUNNER_TEMP/project.tar.gz" >/dev/null
           tar -xzf "$RUNNER_TEMP/project.tar.gz" -C .
-          rm -rf bootstrap README2.md .github/workflows/bootstrap-project.yml
+          rm -rf bootstrap README2.md
+          rm -f .github/workflows/ci.yml
 
       - name: Commit expanded project
         shell: bash
