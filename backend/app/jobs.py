@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+from .security import verify_analysis_token
 from .services import downloader
 
 
@@ -34,6 +35,11 @@ class JobStore:
         self.jobs: dict[str, Job] = {}
         self.lock = threading.Lock()
         self.ttl = int(os.getenv("JOB_TTL_SECONDS", "1800"))
+        try:
+            max_jobs = int(os.getenv("MAX_JOBS", "100"))
+        except ValueError:
+            max_jobs = 100
+        self.max_jobs = max(10, min(max_jobs, 500))
         self.tmp_root = os.getenv("MEDIA_TMP_DIR") or None
         if self.tmp_root:
             Path(self.tmp_root).mkdir(parents=True, exist_ok=True)
@@ -59,11 +65,14 @@ class JobStore:
             if job.tmpdir:
                 shutil.rmtree(job.tmpdir, ignore_errors=True)
 
-    def create(self, url: str, asset_id: str) -> Job:
+    def create(self, url: str, asset_id: str, analysis_token: str) -> Job:
         self.cleanup()
         downloader.validate_asset_id(url, asset_id)
-        job = Job(id=uuid.uuid4().hex, url=url, asset_id=asset_id)
+        verify_analysis_token(analysis_token, url, asset_id)
         with self.lock:
+            if len(self.jobs) >= self.max_jobs:
+                raise HTTPException(status_code=503, detail="Download queue is full; try again shortly")
+            job = Job(id=uuid.uuid4().hex, url=url, asset_id=asset_id)
             self.jobs[job.id] = job
         self.executor.submit(self._run, job.id)
         return job
