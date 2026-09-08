@@ -9,11 +9,12 @@ from starlette.responses import FileResponse
 
 from .jobs import store
 from .models import AnalyzeRequest, AnalyzeResponse, DownloadRequest, HealthResponse
+from .security import verify_analysis_token
 from .services import downloader
 
 app = FastAPI(
     title="insta-thread API",
-    version="0.3.0",
+    version="0.4.0",
     description="Unified analyzer/downloader for public media from five supported platforms.",
 )
 
@@ -42,7 +43,7 @@ def analyze_media(payload: AnalyzeRequest) -> AnalyzeResponse:
 
 @app.post("/api/v1/jobs")
 def create_job(payload: DownloadRequest):
-    job = store.create(payload.url, payload.asset_id)
+    job = store.create(payload.url, payload.asset_id, payload.analysis_token)
     return {"id": job.id, "status": job.status}
 
 
@@ -70,8 +71,12 @@ def get_job_file(job_id: str):
     )
 
 
-# Direct API endpoint remains useful for local/debug clients. Public browser UI uses
-# background jobs so Cloudflare never waits >125 seconds for the first response byte.
+# Disabled in production by default. The public browser flow must use background jobs
+# so Cloudflare never waits on a long extractor/FFmpeg request.
 @app.post("/api/v1/download")
 def download_media(payload: DownloadRequest):
+    enabled = os.getenv("ENABLE_DIRECT_DOWNLOAD", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        raise HTTPException(status_code=404, detail="Direct download endpoint is disabled")
+    verify_analysis_token(payload.analysis_token, payload.url, payload.asset_id)
     return downloader.download(payload.url, payload.asset_id)
