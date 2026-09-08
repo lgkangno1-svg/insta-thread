@@ -25,10 +25,14 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install backend and test dependencies
         run: pip install -r backend/requirements.txt 'pytest>=8.3,<10'
+      - name: Verify dependency graph
+        run: pip check
       - name: Run tests
         run: python -m pytest -q backend/tests
-      - name: Compile Python sources
-        run: python -m compileall -q backend/app
+      - name: Compile Python sources and provisioning script
+        run: |
+          python -m compileall -q backend/app
+          python -m py_compile scripts/provision-cloudflare.py
 
   static-web-checks:
     runs-on: ubuntu-latest
@@ -47,6 +51,15 @@ jobs:
             test -f "web/public/${page}.html"
             grep -q "https://download.avocadoss.co.kr/${page}" "web/public/${page}.html"
           done
+      - name: Validate browser JavaScript and shell automation syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/public/app.js
+          node --check web/public/monetization.js
+          for script in scripts/*.sh; do bash -n "$script"; done
+      - name: Validate Compose configuration
+        run: docker compose config >/dev/null
 
   docker-build:
     runs-on: ubuntu-latest
