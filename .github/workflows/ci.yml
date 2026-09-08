@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Run tests
+        run: python -m pytest -q backend/tests
+      - name: Compile Python sources
+        run: python -m compileall -q backend/app
+
+  static-web-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required SEO files and canonical hostname
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f web/public/index.html
+          test -f web/public/robots.txt
+          test -f web/public/sitemap.xml
+          grep -q 'https://download.avocadoss.co.kr/' web/public/index.html
+          for page in youtube-downloader instagram-reels-downloader threads-downloader douyin-downloader xiaohongshu-downloader; do
+            test -f "web/public/${page}.html"
+            grep -q "https://download.avocadoss.co.kr/${page}" "web/public/${page}.html"
+          done
+
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production images
+        run: docker compose build web api
