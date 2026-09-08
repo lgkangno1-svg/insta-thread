@@ -10,6 +10,7 @@ node_modules/
 dist/
 downloads/
 tmp/
+data/deployed-sha
 data/tmp/*
 !data/tmp/.gitkeep
 .DS_Store
