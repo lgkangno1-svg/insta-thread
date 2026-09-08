@@ -1,94 +1,176 @@
-# Production deployment: avocadoss.co.kr + mini PC + Cloudflare
+# Production deployment: miniPC + Cloudflare Tunnel
 
-## Canonical SEO structure
+Production is designed around one dedicated miniPC stack and one dedicated remotely managed Cloudflare Tunnel. Do **not** reuse or restart unrelated tunnels from other AVOCADOSS services.
 
-Primary site:
+## Production flow
 
-- `https://download.avocadoss.co.kr/`
-
-Canonical platform pages:
-
-- `/youtube-downloader`
-- `/instagram-reels-downloader`
-- `/threads-downloader`
-- `/douyin-downloader`
-- `/xiaohongshu-downloader`
-
-Memorable alias hostnames:
-
-- `youtube.avocadoss.co.kr` -> 301 to `/youtube-downloader`
-- `insta.avocadoss.co.kr` -> 301 to `/instagram-reels-downloader`
-- `thread.avocadoss.co.kr` -> 301 to `/threads-downloader`
-- `douyin.avocadoss.co.kr` -> 301 to `/douyin-downloader`
-- `xiaohongshu.avocadoss.co.kr` -> 301 to `/xiaohongshu-downloader`
-
-Rationale: Google explicitly says it has no indexing/ranking preference for subdomains versus subdirectories. A single canonical hostname is easier to operate and consolidates internal linking/canonicalization, while the alias subdomains remain useful as memorable entry URLs.
-
-## Origin architecture
-
-`Browser -> Cloudflare -> Cloudflare Tunnel -> mini PC Docker -> Nginx -> FastAPI -> yt-dlp / FFmpeg`
-
-The tunnel is outbound-only, so the mini PC does not need inbound ports exposed to the Internet.
-
-## Cloudflare tunnel routes
-
-Create one remotely-managed tunnel (suggested name: `avocadoss-download`) and publish all six hostnames to the same local service:
-
-- `download.avocadoss.co.kr` -> `http://web:80`
-- `youtube.avocadoss.co.kr` -> `http://web:80`
-- `insta.avocadoss.co.kr` -> `http://web:80`
-- `thread.avocadoss.co.kr` -> `http://web:80`
-- `douyin.avocadoss.co.kr` -> `http://web:80`
-- `xiaohongshu.avocadoss.co.kr` -> `http://web:80`
-
-Cloudflare can publish multiple hostnames through one tunnel. The Nginx configuration performs the platform alias 301 redirects.
-
-## First mini-PC deployment
-
-```bash
-git clone <repository-url> insta-thread
-cd insta-thread
-cp .env.example .env
-# set CLOUDFLARE_TUNNEL_TOKEN in .env
-./scripts/deploy-minipc.sh
+```text
+main push
+  -> GitHub Actions CI
+     -> backend tests
+     -> frontend/SEO/static checks
+     -> Docker production build
+  -> Promote production workflow
+     -> production branch points at the tested SHA only
+  -> miniPC systemd timer
+     -> fetch production
+     -> build + deploy
+     -> local health check
+     -> rollback on failure
+  -> dedicated avocadoss-download Cloudflare Tunnel
 ```
 
-Local health checks:
+## Hostnames
+
+Canonical:
+
+- `download.avocadoss.co.kr`
+
+Aliases, all served by the same Tunnel and redirected by Nginx to canonical platform paths:
+
+- `youtube.avocadoss.co.kr`
+- `insta.avocadoss.co.kr`
+- `thread.avocadoss.co.kr`
+- `douyin.avocadoss.co.kr`
+- `xiaohongshu.avocadoss.co.kr`
+
+The Tunnel ingress target is `http://web:80` because cloudflared runs inside this project's Docker Compose network.
+
+## 1. miniPC prerequisites
+
+Required:
+
+- Linux + systemd
+- Git
+- rsync
+- curl
+- Docker Engine
+- Docker Compose plugin (`docker compose`)
+- outbound Internet access
+
+No public inbound port is required. Nginx is bound only to `127.0.0.1:8080` on the host.
+
+## 2. Install the tested production checkout
+
+Use any temporary checkout of the repository to invoke the installer:
 
 ```bash
-curl http://127.0.0.1:8080/health
-curl -I http://127.0.0.1:8080/
+git clone https://github.com/lgkangno1-svg/insta-thread.git ~/insta-thread-bootstrap
+cd ~/insta-thread-bootstrap
+sudo bash scripts/install-minipc-systemd.sh
 ```
 
-## Why downloads use background jobs
+The installer:
 
-Cloudflare's default origin Proxy Read Timeout is 125 seconds on non-Enterprise plans. Preparing a large YouTube file can exceed that before the first byte is returned. The site therefore creates a background download job, polls its status, and only requests the file after it is ready. This avoids holding a single long request open while yt-dlp and FFmpeg work.
+1. clones/resets `/opt/insta-thread` to the CI-promoted `production` branch;
+2. preserves `/opt/insta-thread/.env` and `data/`;
+3. generates `DOWNLOAD_TOKEN_SECRET` once if it is blank;
+4. installs only the `insta-thread-*` systemd units;
+5. starts the local Docker stack;
+6. requires `http://127.0.0.1:8080/health` to pass;
+7. enables the production update timer.
 
-## mini-PC sizing / operations
+The public Tunnel remains disabled until a real Tunnel token is configured.
 
-For an N100-class mini PC:
+## 3. Provision Cloudflare automatically with the API
 
-- start with `DOWNLOAD_WORKERS=2`
-- avoid transcoding; use remux/merge paths
-- use SSD-backed `./data/tmp`, not RAM tmpfs
-- keep a file-size ceiling
-- monitor disk free space and outbound bandwidth
-- run Docker and cloudflared with restart policies
+The repository includes `scripts/provision-cloudflare.py`. It is intentionally conservative: it only creates/reuses a Tunnel named `avocadoss-download`, refuses unrelated ingress rules by default, and refuses to overwrite non-CNAME DNS records unless an explicit force variable is set.
 
-If traffic grows, move only the API/job workers to a VPS while keeping the same frontend/domain structure.
+Create a scoped Cloudflare API token with:
 
-## Hardened mini-PC service install
+- Account -> Cloudflare Tunnel -> Edit
+- Zone (`avocadoss.co.kr`) -> DNS -> Edit
+- Zone (`avocadoss.co.kr`) -> Zone -> Read, for automatic zone/account discovery
 
-The repository includes separate systemd wrappers so this stack and its Cloudflare connector can be managed without touching other services on the same mini PC:
+Then on the miniPC:
 
 ```bash
-sudo ./scripts/install-minipc-systemd.sh
+cd /opt/insta-thread
+read -rsp 'Cloudflare API token: ' CLOUDFLARE_API_TOKEN; echo
+export CLOUDFLARE_API_TOKEN
+sudo --preserve-env=CLOUDFLARE_API_TOKEN python3 scripts/provision-cloudflare.py
+unset CLOUDFLARE_API_TOKEN
 ```
 
-After the dedicated Cloudflare public hostnames are configured, verify production with no-retry samples:
+The provisioner will:
+
+1. discover the active `avocadoss.co.kr` zone and account;
+2. create or reuse only the `avocadoss-download` Tunnel;
+3. set all six ingress hostnames to `http://web:80` plus a final `http_status:404` catch-all;
+4. create/update proxied CNAME records to `<TUNNEL_UUID>.cfargotunnel.com`;
+5. retrieve the remotely managed Tunnel token;
+6. write the Tunnel token into `/opt/insta-thread/.env` without printing it.
+
+## 4. Start only this project's Tunnel
 
 ```bash
-PUBLIC_SAMPLES=12 ./scripts/smoke.sh
+sudo systemctl enable --now insta-thread-tunnel.service
 ```
 
-See `docs/CLOUDFLARE_RUNBOOK.md` for failure interpretation and safe restart order.
+Do not use commands such as `pkill cloudflared`, `systemctl restart cloudflared*`, or bulk Docker cleanup. Other AVOCADOSS services may have unrelated Tunnel connectors.
+
+## 5. Verify local and public health
+
+Local first:
+
+```bash
+curl -fsS --max-time 5 http://127.0.0.1:8080/health
+```
+
+Then public samples:
+
+```bash
+cd /opt/insta-thread
+sudo PUBLIC_SAMPLES=12 bash scripts/smoke.sh
+```
+
+Treat sampled Cloudflare `1033`, `530`, and origin `502` responses as a deployment failure. Diagnose local origin health before touching the Tunnel.
+
+## 6. Automatic tested updates
+
+`insta-thread-update.timer` checks every ~10 minutes. It fetches **only** the `production` branch, which is moved only after GitHub CI succeeds.
+
+Manual update/check:
+
+```bash
+sudo systemctl start insta-thread-update.service
+sudo journalctl -u insta-thread-update.service -n 100 --no-pager
+```
+
+The updater:
+
+- serializes deployments with `flock`;
+- builds before switching traffic;
+- checks local health for up to 60 seconds;
+- rolls source + containers back to the previous SHA on failure;
+- does not restart a healthy Tunnel for ordinary app deploys;
+- refreshes only `insta-thread-*` systemd unit files.
+
+## 7. Production `.env`
+
+Important defaults:
+
+```dotenv
+DOWNLOAD_TOKEN_SECRET=<generated-once-by-installer>
+ANALYSIS_TOKEN_TTL_SECONDS=900
+SPONSOR_GATE_ENABLED=false
+SPONSOR_GATE_SECONDS=4
+MAX_JOBS=100
+MAX_MEDIA_MB=750
+MIN_FREE_GB=5
+JOB_TTL_SECONDS=1800
+READY_JOB_TTL_SECONDS=600
+ERROR_JOB_TTL_SECONDS=120
+ENABLE_DIRECT_DOWNLOAD=false
+```
+
+`DOWNLOAD_TOKEN_SECRET`, the Cloudflare API token, Tunnel token, cookies, and session data must never be committed.
+
+## 8. Public-download architecture notes
+
+- Long yt-dlp/FFmpeg work runs in background jobs; Cloudflare does not wait for the full extraction request.
+- Prepared files expire quickly and are removed after delivery.
+- New jobs stop when disk free space falls below the configured reserve.
+- Download jobs require a signed analysis ticket bound to the exact URL and asset choice.
+- The synchronous debug download endpoint is disabled by default.
+- Cloudflare is the only intended public ingress; the origin HTTP port stays loopback-only.
