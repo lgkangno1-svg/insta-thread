@@ -33,8 +33,8 @@ def test_analysis_token_rejects_tampering(monkeypatch):
     monkeypatch.setenv("SPONSOR_GATE_ENABLED", "false")
     token = issue_analysis_token(URL, ["video:best"])
     body, sig = token.split(".", 1)
-    replacement = "A" if sig[-1] != "A" else "B"
-    tampered = f"{body}.{sig[:-1]}{replacement}"
+    replacement = "A" if sig[0] != "A" else "B"
+    tampered = f"{body}.{replacement}{sig[1:]}"
     with pytest.raises(HTTPException) as exc:
         verify_analysis_token(tampered, URL, "video:best")
     assert exc.value.status_code == 403
