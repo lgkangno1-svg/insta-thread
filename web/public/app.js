@@ -18,17 +18,22 @@
 
   const kindLabel = kind => kind === 'video' ? 'Video' : (kind === 'thumbnail' ? 'Thumbnail' : 'Image');
 
-  async function startDownload(url, assetId, btn) {
+  async function startDownload(url, assetId, analysisToken, gate, btn) {
     const old = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'Queued…';
     setStatus('Preparing your file on the download server…');
     try {
-      if (window.runSponsorGate) await window.runSponsorGate();
+      if (window.runSponsorGate) {
+        await window.runSponsorGate({
+          force: Boolean(gate && gate.enabled),
+          requiredSeconds: Number(gate && gate.seconds || 0)
+        });
+      }
       const res = await fetch('/api/v1/jobs', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url, asset_id: assetId})
+        body: JSON.stringify({url, asset_id: assetId, analysis_token: analysisToken})
       });
       const created = await res.json();
       if (!res.ok) throw new Error(created.detail || `Could not start download (${res.status})`);
@@ -76,6 +81,7 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || `Analyze failed (${res.status})`);
+      if (!data.analysis_token) throw new Error('The server did not issue a download ticket. Analyze again.');
       if (preferred && data.platform !== preferred) {
         setStatus(`Detected ${data.platform}. This page also supports it through the same engine.`);
       } else {
@@ -86,6 +92,7 @@
       resultTitle.textContent = data.title || 'Public media';
       resultMeta.textContent = [data.author, data.platform].filter(Boolean).join(' · ');
 
+      const gate = {enabled: data.sponsor_gate_enabled, seconds: data.gate_seconds};
       for (const item of data.assets) {
         const row = document.createElement('div');
         row.className = 'asset';
@@ -111,7 +118,7 @@
         dl.className = 'download';
         dl.type = 'button';
         dl.textContent = 'Download';
-        dl.addEventListener('click', () => startDownload(url, item.id, dl));
+        dl.addEventListener('click', () => startDownload(url, item.id, data.analysis_token, gate, dl));
         row.appendChild(dl);
         assets.appendChild(row);
       }
