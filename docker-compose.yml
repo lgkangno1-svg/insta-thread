@@ -1,0 +1,39 @@
+services:
+  web:
+    build: ./web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - api
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      YTDLP_POT_PROVIDER_URL: http://bgutil-provider:4416
+      CORS_ORIGINS: https://download.avocadoss.co.kr
+      YTDLP_SOCKET_TIMEOUT: 30
+      DOWNLOAD_WORKERS: 2
+      JOB_TTL_SECONDS: 1800
+      MEDIA_TMP_DIR: /data/tmp
+    depends_on:
+      - bgutil-provider
+    volumes:
+      - ./data/tmp:/data/tmp
+
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+    expose:
+      - "4416"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - web

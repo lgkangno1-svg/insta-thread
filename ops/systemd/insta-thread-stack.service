@@ -1,0 +1,16 @@
+[Unit]
+Description=AVOCADOSS unified media downloader Docker stack
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/insta-thread
+ExecStart=/usr/bin/docker compose up -d --build web api bgutil-provider
+ExecStop=/usr/bin/docker compose stop web api bgutil-provider
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

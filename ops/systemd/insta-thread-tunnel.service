@@ -1,0 +1,16 @@
+[Unit]
+Description=AVOCADOSS downloader dedicated Cloudflare Tunnel
+After=network-online.target insta-thread-stack.service
+Wants=network-online.target
+Requires=insta-thread-stack.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/insta-thread
+ExecStart=/usr/bin/docker compose --profile tunnel up -d cloudflared
+ExecStop=/usr/bin/docker compose stop cloudflared
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

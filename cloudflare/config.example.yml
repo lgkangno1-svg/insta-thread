@@ -1,0 +1,19 @@
+# Alternative locally-managed Cloudflare Tunnel configuration.
+# For most users, a remotely-managed tunnel token is simpler.
+tunnel: YOUR-TUNNEL-UUID
+credentials-file: /etc/cloudflared/YOUR-TUNNEL-UUID.json
+
+ingress:
+  - hostname: download.avocadoss.co.kr
+    service: http://web:80
+  - hostname: insta.avocadoss.co.kr
+    service: http://web:80
+  - hostname: thread.avocadoss.co.kr
+    service: http://web:80
+  - hostname: douyin.avocadoss.co.kr
+    service: http://web:80
+  - hostname: xiaohongshu.avocadoss.co.kr
+    service: http://web:80
+  - hostname: youtube.avocadoss.co.kr
+    service: http://web:80
+  - service: http_status:404

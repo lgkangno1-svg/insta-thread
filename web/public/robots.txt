@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://download.avocadoss.co.kr/sitemap.xml
