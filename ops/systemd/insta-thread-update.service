@@ -7,7 +7,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/insta-thread
-ExecStart=/opt/insta-thread/scripts/update-production.sh
+ExecStart=/usr/bin/bash /opt/insta-thread/scripts/update-production.sh
 TimeoutStartSec=1800
 Nice=10
 IOSchedulingClass=best-effort
