@@ -1,0 +1,14 @@
+[Unit]
+Description=Update AVOCADOSS downloader to latest CI-promoted production commit
+After=network-online.target docker.service insta-thread-stack.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/insta-thread
+ExecStart=/opt/insta-thread/scripts/update-production.sh
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
