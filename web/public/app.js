@@ -1,22 +1,66 @@
 (() => {
   const form = document.querySelector('[data-downloader-form]');
   if (!form) return;
+
   const input = form.querySelector('input[name="url"]');
   const button = form.querySelector('button[type="submit"]');
   const status = document.querySelector('[data-status]');
+  const detection = document.querySelector('[data-detected]');
   const result = document.querySelector('[data-result]');
   const resultImg = document.querySelector('[data-result-img]');
   const resultTitle = document.querySelector('[data-result-title]');
   const resultMeta = document.querySelector('[data-result-meta]');
   const assets = document.querySelector('[data-assets]');
-  const preferred = document.body.dataset.platform || '';
 
-  const setStatus = (text, error=false) => {
+  const platformLabels = {
+    youtube: 'YouTube',
+    instagram: 'Instagram',
+    threads: 'Threads',
+    douyin: 'Douyin',
+    xiaohongshu: 'Xiaohongshu'
+  };
+
+  const setStatus = (text, error = false) => {
+    if (!status) return;
     status.textContent = text || '';
     status.className = 'status' + (error ? ' error' : '');
   };
 
+  const setDetection = (text, active = false) => {
+    if (!detection) return;
+    detection.textContent = text;
+    detection.className = 'detected' + (active ? ' active' : '');
+  };
+
+  const detectFromUrl = raw => {
+    try {
+      const host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
+      if (host === 'youtu.be' || host.endsWith('youtube.com')) return 'youtube';
+      if (host.endsWith('instagram.com')) return 'instagram';
+      if (host.endsWith('threads.com') || host.endsWith('threads.net')) return 'threads';
+      if (host.endsWith('douyin.com')) return 'douyin';
+      if (host.endsWith('xiaohongshu.com') || host.endsWith('xhslink.com') || host.endsWith('xhslink.cn')) return 'xiaohongshu';
+    } catch (_) {
+      return '';
+    }
+    return '';
+  };
+
   const kindLabel = kind => kind === 'video' ? 'Video' : (kind === 'thumbnail' ? 'Thumbnail' : 'Image');
+
+  input.addEventListener('input', () => {
+    const value = input.value.trim();
+    if (!value) {
+      setDetection('Paste any supported public link — the platform is detected automatically.');
+      return;
+    }
+    const platform = detectFromUrl(value);
+    if (platform) {
+      setDetection(`${platformLabels[platform]} link detected`, true);
+    } else {
+      setDetection('Paste a YouTube, Instagram, Threads, Douyin or Xiaohongshu link.');
+    }
+  });
 
   async function startDownload(url, assetId, analysisToken, gate, btn) {
     const old = btn.textContent;
@@ -40,7 +84,7 @@
       const started = Date.now();
       while (Date.now() - started < 12 * 60 * 1000) {
         await new Promise(resolve => setTimeout(resolve, 1500));
-        const statusRes = await fetch(`/api/v1/jobs/${created.id}`, {cache:'no-store'});
+        const statusRes = await fetch(`/api/v1/jobs/${created.id}`, {cache: 'no-store'});
         const job = await statusRes.json();
         if (!statusRes.ok) throw new Error(job.detail || 'Download job disappeared');
         if (job.status === 'error') throw new Error(job.error || 'Download preparation failed');
@@ -65,14 +109,16 @@
     }
   }
 
-  form.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', async e => {
     e.preventDefault();
     const url = input.value.trim();
     if (!url) return;
+
     button.disabled = true;
     result.classList.remove('show');
     assets.innerHTML = '';
     setStatus('Analyzing the public link…');
+
     try {
       const res = await fetch('/api/v1/analyze', {
         method: 'POST',
@@ -82,15 +128,15 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || `Analyze failed (${res.status})`);
       if (!data.analysis_token) throw new Error('The server did not issue a download ticket. Analyze again.');
-      if (preferred && data.platform !== preferred) {
-        setStatus(`Detected ${data.platform}. This page also supports it through the same engine.`);
-      } else {
-        setStatus(`Detected ${data.platform}. Choose the exact file you want.`);
-      }
+
+      const label = platformLabels[data.platform] || data.platform;
+      setDetection(`${label} detected`, true);
+      setStatus(`Ready — choose the exact ${label} file you want.`);
+
       resultImg.src = data.preview_url || '';
       resultImg.style.display = data.preview_url ? 'block' : 'none';
       resultTitle.textContent = data.title || 'Public media';
-      resultMeta.textContent = [data.author, data.platform].filter(Boolean).join(' · ');
+      resultMeta.textContent = [data.author, label].filter(Boolean).join(' · ');
 
       const gate = {enabled: data.sponsor_gate_enabled, seconds: data.gate_seconds};
       for (const item of data.assets) {
@@ -106,13 +152,13 @@
         }
         const main = document.createElement('div');
         main.className = 'asset-main';
-        const label = document.createElement('div');
-        label.className = 'asset-label';
-        label.textContent = item.label;
+        const labelEl = document.createElement('div');
+        labelEl.className = 'asset-label';
+        labelEl.textContent = item.label;
         const sub = document.createElement('div');
         sub.className = 'asset-sub';
         sub.textContent = `${kindLabel(item.kind)}${item.ext ? ' · ' + item.ext.toUpperCase() : ''}`;
-        main.append(label, sub);
+        main.append(labelEl, sub);
         row.appendChild(main);
         const dl = document.createElement('button');
         dl.className = 'download';
@@ -123,11 +169,13 @@
         assets.appendChild(row);
       }
       result.classList.add('show');
-      result.scrollIntoView({behavior:'smooth', block:'nearest'});
+      result.scrollIntoView({behavior: 'smooth', block: 'nearest'});
     } catch (err) {
       setStatus(err.message || 'Could not analyze this link.', true);
     } finally {
       button.disabled = false;
     }
   });
+
+  setDetection('Paste any supported public link — the platform is detected automatically.');
 })();
