@@ -9,7 +9,12 @@ from fastapi import HTTPException
 from ..platforms import instagram_adapter, threads_adapter, xiaohongshu_adapter, ytdlp_adapter
 from ..platforms.router import detect_platform
 from ..security import issue_analysis_token, sponsor_gate_enabled, sponsor_gate_seconds
-from .media_fetch import download_resolved_media, prepare_resolved_media
+from .media_fetch import (
+    download_resolved_archive,
+    download_resolved_media,
+    prepare_resolved_archive,
+    prepare_resolved_media,
+)
 
 
 def _max_media_mb() -> int:
@@ -48,7 +53,7 @@ def validate_asset_id(url: str, asset_id: str) -> None:
             raise HTTPException(status_code=400, detail="Invalid Threads asset selection")
         return
     if route.platform == "xiaohongshu":
-        if asset_id == "video:best" or re.fullmatch(r"image:\d+", asset_id):
+        if asset_id in {"video:best", "images:zip"} or re.fullmatch(r"image:\d+", asset_id):
             return
         raise HTTPException(status_code=400, detail="Invalid Xiaohongshu asset selection")
     if re.fullmatch(r"video:(?:best|\d{3,4})", asset_id):
@@ -69,6 +74,15 @@ def prepare(url: str, asset_id: str, tmp_root: str | None = None) -> tuple[Path,
         source, ext = instagram_adapter.resolve_asset(url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.instagram.com/")
     if route.platform == "xiaohongshu":
+        if asset_id == "images:zip":
+            items = xiaohongshu_adapter.resolve_all_images(url)
+            return prepare_resolved_archive(
+                items,
+                max_size_mb=max_size_mb,
+                tmp_root=tmp_root,
+                referer="https://www.xiaohongshu.com/",
+                filename="xiaohongshu-images.zip",
+            )
         source, ext = xiaohongshu_adapter.resolve_asset(url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.xiaohongshu.com/")
     if asset_id.startswith("thumbnail:"):
@@ -88,6 +102,14 @@ def download(url: str, asset_id: str):
         source, ext = instagram_adapter.resolve_asset(url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.instagram.com/")
     if route.platform == "xiaohongshu":
+        if asset_id == "images:zip":
+            items = xiaohongshu_adapter.resolve_all_images(url)
+            return download_resolved_archive(
+                items,
+                max_size_mb=max_size_mb,
+                referer="https://www.xiaohongshu.com/",
+                filename="xiaohongshu-images.zip",
+            )
         source, ext = xiaohongshu_adapter.resolve_asset(url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.xiaohongshu.com/")
     if asset_id.startswith("thumbnail:"):
