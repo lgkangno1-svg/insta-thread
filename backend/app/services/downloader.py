@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from ..platforms import instagram_adapter, threads_adapter, ytdlp_adapter
+from ..platforms import instagram_adapter, threads_adapter, xiaohongshu_adapter, ytdlp_adapter
 from ..platforms.router import detect_platform
 from ..security import issue_analysis_token, sponsor_gate_enabled, sponsor_gate_seconds
 from .media_fetch import download_resolved_media, prepare_resolved_media
@@ -26,6 +26,8 @@ def analyze(url: str):
         result = threads_adapter.analyze(url)
     elif route.platform == "instagram":
         result = instagram_adapter.analyze(url)
+    elif route.platform == "xiaohongshu":
+        result = xiaohongshu_adapter.analyze(url)
     else:
         # Final product scope requests cover/thumbnail choices for Douyin.
         include_thumbnails = route.platform == "douyin"
@@ -45,6 +47,10 @@ def validate_asset_id(url: str, asset_id: str) -> None:
         if not re.fullmatch(r"asset:\d+", asset_id):
             raise HTTPException(status_code=400, detail="Invalid Threads asset selection")
         return
+    if route.platform == "xiaohongshu":
+        if asset_id == "video:best" or re.fullmatch(r"image:\d+", asset_id):
+            return
+        raise HTTPException(status_code=400, detail="Invalid Xiaohongshu asset selection")
     if re.fullmatch(r"video:(?:best|\d{3,4})", asset_id):
         return
     if route.platform in {"instagram", "douyin"} and re.fullmatch(r"thumbnail:\d+", asset_id):
@@ -62,6 +68,9 @@ def prepare(url: str, asset_id: str, tmp_root: str | None = None) -> tuple[Path,
     if route.platform == "instagram":
         source, ext = instagram_adapter.resolve_asset(url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.instagram.com/")
+    if route.platform == "xiaohongshu":
+        source, ext = xiaohongshu_adapter.resolve_asset(url, asset_id)
+        return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.xiaohongshu.com/")
     if asset_id.startswith("thumbnail:"):
         source, ext = ytdlp_adapter.resolve_thumbnail(url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.douyin.com/")
@@ -78,6 +87,9 @@ def download(url: str, asset_id: str):
     if route.platform == "instagram":
         source, ext = instagram_adapter.resolve_asset(url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.instagram.com/")
+    if route.platform == "xiaohongshu":
+        source, ext = xiaohongshu_adapter.resolve_asset(url, asset_id)
+        return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.xiaohongshu.com/")
     if asset_id.startswith("thumbnail:"):
         source, ext = ytdlp_adapter.resolve_thumbnail(url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.douyin.com/")
