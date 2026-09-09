@@ -134,9 +134,18 @@ def _flatten_assets(post: dict[str, Any]) -> list[dict[str, Any]]:
             # Each media unit represents one clip. Variants usually point to the same path;
             # keep the first unique progressive rendition for the simple download UI.
             flat.append({"kind": "video", "url": video_urls[0], "unit": unit_index})
-        # Keep up to four image/cover resolutions per unit so the visitor can choose.
+
+        # image_versions2 is a cover/thumbnail for video units, but it is the actual
+        # downloadable image for image-only units. Preserve that distinction in the UI.
+        image_kind = "thumbnail" if video_urls else "image"
         for image_index, image in enumerate(_images(unit)[:4]):
-            flat.append({"kind": "thumbnail", "image": image, "url": image["url"], "unit": unit_index, "image_index": image_index})
+            flat.append({
+                "kind": image_kind,
+                "image": image,
+                "url": image["url"],
+                "unit": unit_index,
+                "image_index": image_index,
+            })
     return flat
 
 
@@ -149,18 +158,34 @@ def analyze(url: str) -> AnalyzeResponse:
     assets: list[MediaAsset] = []
     preview = None
     video_no = 0
+    thumbnail_no = 0
     image_no = 0
     for idx, item in enumerate(flat):
-        if item["kind"] == "video":
+        kind = item["kind"]
+        if kind == "video":
             video_no += 1
             assets.append(MediaAsset(id=f"asset:{idx}", kind="video", label=f"Video {video_no}", ext="mp4"))
-        else:
+            continue
+
+        image = item["image"]
+        w, h = image.get("width"), image.get("height")
+        dims = f" · {w}×{h}" if w and h else ""
+        if kind == "image":
             image_no += 1
-            image = item["image"]
-            w, h = image.get("width"), image.get("height")
-            label = f"Thumbnail {image_no}" + (f" · {w}×{h}" if w and h else "")
-            assets.append(MediaAsset(id=f"asset:{idx}", kind="thumbnail", label=label, width=w, height=h, ext="jpg", preview_url=item["url"]))
-            preview = preview or item["url"]
+            label = f"Image {image_no}{dims}"
+        else:
+            thumbnail_no += 1
+            label = f"Thumbnail {thumbnail_no}{dims}"
+        assets.append(MediaAsset(
+            id=f"asset:{idx}",
+            kind=kind,
+            label=label,
+            width=w,
+            height=h,
+            ext="jpg",
+            preview_url=item["url"],
+        ))
+        preview = preview or item["url"]
 
     user = post.get("user") or {}
     caption_obj = post.get("caption") or {}
