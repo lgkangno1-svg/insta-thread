@@ -33,6 +33,40 @@ def test_xhs_parses_observed_normal_note_state_and_images():
     assert assets[0].height == 1558
 
 
+def test_xhs_analyze_adds_zip_for_multi_image_note(monkeypatch):
+    note_id = "6a73dffa000000002c006ead"
+    note = {
+        "noteId": note_id,
+        "type": "normal",
+        "title": "two image note",
+        "user": {"nickname": "owner"},
+        "imageList": [
+            {
+                "width": 1000,
+                "height": 1200,
+                "urlDefault": "https://sns-webpic-qc.xhscdn.com/a.webp",
+                "infoList": [],
+            },
+            {
+                "width": 1080,
+                "height": 1440,
+                "urlDefault": "https://sns-webpic-qc.xhscdn.com/b.jpg",
+                "infoList": [],
+            },
+        ],
+    }
+    monkeypatch.setattr(
+        xiaohongshu_adapter,
+        "_fetch_note",
+        lambda _url: (note, note_id, f"https://www.xiaohongshu.com/explore/{note_id}"),
+    )
+    result = xiaohongshu_adapter.analyze(f"https://www.xiaohongshu.com/explore/{note_id}")
+    assert [asset.id for asset in result.assets] == ["images:zip", "image:0", "image:1"]
+    assert result.assets[0].kind == "archive"
+    assert result.assets[0].ext == "zip"
+    assert "2 images" in result.assets[0].label
+
+
 def test_xhs_video_state_prefers_larger_progressive_stream():
     note = {
         "noteId": "6aaaaaaaaaaaaaaaaaaaaaaa",

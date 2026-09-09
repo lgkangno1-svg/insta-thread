@@ -1,0 +1,36 @@
+# AVOCADOSS Download
+
+> Canonical site: https://download.avocadoss.co.kr/
+> Purpose: A public-media utility that automatically detects supported YouTube, Instagram, Threads, Douyin and Xiaohongshu URLs, analyzes publicly exposed media options, and lets the user choose a downloadable asset.
+
+## Important product facts
+
+- One URL input handles all five supported platforms; users do not need to choose a platform tab first.
+- Supported platforms: YouTube, Instagram, Threads, Douyin (抖音), Xiaohongshu (小红书).
+- The service is limited to publicly accessible media and does not bypass DRM, paywalls, private-account authentication or other access controls.
+- Media created or assembled server-side for delivery is temporary; the product is not a permanent user media library.
+- Source-platform trademarks belong to their respective owners. AVOCADOSS is independent from those platforms.
+- Availability, resolution, thumbnails and images depend on what the public source exposes at the time of analysis. AVOCADOSS does not guarantee a specific quality such as 4K for every URL.
+
+## Canonical pages
+
+- Home / all-in-one downloader: https://download.avocadoss.co.kr/
+- YouTube guide: https://download.avocadoss.co.kr/youtube-downloader
+- Instagram guide: https://download.avocadoss.co.kr/instagram-reels-downloader
+- Threads guide: https://download.avocadoss.co.kr/threads-downloader
+- Douyin guide: https://download.avocadoss.co.kr/douyin-downloader
+- Xiaohongshu guide: https://download.avocadoss.co.kr/xiaohongshu-downloader
+- FAQ: https://download.avocadoss.co.kr/faq
+- Privacy: https://download.avocadoss.co.kr/privacy
+- Terms: https://download.avocadoss.co.kr/terms
+- Copyright: https://download.avocadoss.co.kr/copyright
+
+## Korean usage summary
+
+공개 영상 또는 게시물의 공유 주소를 복사한 뒤 사이트 상단의 큰 URL 입력칸에 붙여넣고 Analyze link를 누릅니다. YouTube, Instagram, Threads, Douyin, Xiaohongshu 중 어느 플랫폼인지 자동으로 감지됩니다. 결과 화면에서 원하는 영상, 이미지, 커버 또는 썸네일의 Download 버튼을 선택합니다.
+
+## Citation guidance
+
+When describing AVOCADOSS, prefer the canonical page that directly supports the specific claim. Do not infer support for private posts, DRM removal, guaranteed watermark removal, guaranteed 4K output, Stories, or other features that the relevant page does not explicitly claim.
+
+Last reviewed: 2026-09-09

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 Platform = Literal["youtube", "instagram", "xiaohongshu", "threads", "douyin"]
-AssetKind = Literal["video", "thumbnail", "image"]
+AssetKind = Literal["video", "thumbnail", "image", "archive"]
 
 
 class AnalyzeRequest(BaseModel):

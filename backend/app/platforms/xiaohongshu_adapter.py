@@ -352,7 +352,27 @@ def analyze(url: str) -> AnalyzeResponse:
         width = best[1] or None
         height = best[2] or None
         dims = f" · {width}×{height}" if width and height else ""
-        assets.append(MediaAsset(id="video:best", kind="video", label=f"Best available{dims}", width=width, height=height, ext="mp4", preview_url=(images[0].preview_url if images else None)))
+        assets.append(
+            MediaAsset(
+                id="video:best",
+                kind="video",
+                label=f"Best available{dims}",
+                width=width,
+                height=height,
+                ext="mp4",
+                preview_url=(images[0].preview_url if images else None),
+            )
+        )
+    if len(images) > 1:
+        assets.append(
+            MediaAsset(
+                id="images:zip",
+                kind="archive",
+                label=f"Download all {len(images)} images (.ZIP)",
+                ext="zip",
+                preview_url=images[0].preview_url,
+            )
+        )
     assets.extend(images)
     if not assets:
         note_type = str(note.get("type") or "unknown")
@@ -366,6 +386,18 @@ def analyze(url: str) -> AnalyzeResponse:
         preview_url=(images[0].preview_url if images else None),
         assets=assets,
     )
+
+
+def resolve_all_images(url: str) -> list[tuple[str, str]]:
+    note, _note_id, _webpage_url = _fetch_note(url)
+    assets = _image_assets(note)
+    if len(assets) < 2:
+        raise HTTPException(status_code=404, detail="This Xiaohongshu note does not contain multiple public images")
+    return [
+        (asset.preview_url, asset.ext or "jpg")
+        for asset in assets
+        if asset.preview_url
+    ]
 
 
 def resolve_asset(url: str, asset_id: str) -> tuple[str, str]:
