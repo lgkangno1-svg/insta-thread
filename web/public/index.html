@@ -9,14 +9,14 @@
   <meta name="theme-color" content="#0d141d">
   <link rel="canonical" href="https://download.avocadoss.co.kr/">
   <link rel="icon" href="/favicon.svg">
-  <link rel="stylesheet" href="/styles.css?v=20260909b">
+  <link rel="stylesheet" href="/styles.css?v=20260909c">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="AVOCADOSS Download">
   <meta property="og:title" content="All-in-One Social Media Downloader | AVOCADOSS">
   <meta property="og:description" content="One input automatically detects YouTube, Instagram, Threads, Douyin and Xiaohongshu public links.">
   <meta property="og:url" content="https://download.avocadoss.co.kr/">
   <meta name="twitter:card" content="summary">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://download.avocadoss.co.kr/#website","url":"https://download.avocadoss.co.kr/","name":"AVOCADOSS Download","description":"Unified public-media downloader for supported social platforms","inLanguage":"en"},{"@type":"WebApplication","@id":"https://download.avocadoss.co.kr/#app","name":"AVOCADOSS Social Media Downloader","url":"https://download.avocadoss.co.kr/","applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires a modern web browser","description":"Analyze a supported public YouTube, Instagram, Threads, Douyin or Xiaohongshu URL and download available media files.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"isAccessibleForFree":true},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Do I need to choose the platform before pasting a link?","acceptedAnswer":{"@type":"Answer","text":"No. Paste a supported public URL into the single input. The server detects YouTube, Instagram, Threads, Douyin or Xiaohongshu automatically."}},{"@type":"Question","name":"Does AVOCADOSS support private posts or DRM-protected media?","acceptedAnswer":{"@type":"Answer","text":"No. The service is limited to media that is publicly accessible and does not bypass private-account restrictions, paywalls, DRM or other access controls."}},{"@type":"Question","name":"Are downloaded files stored permanently?","acceptedAnswer":{"@type":"Answer","text":"No permanent user media library is provided. Files that require server-side preparation are temporary and are removed after delivery."}}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://download.avocadoss.co.kr/#website","url":"https://download.avocadoss.co.kr/","name":"AVOCADOSS Download","description":"Unified public-media downloader for supported social platforms","inLanguage":["en","ko"]},{"@type":"WebApplication","@id":"https://download.avocadoss.co.kr/#app","name":"AVOCADOSS Social Media Downloader","url":"https://download.avocadoss.co.kr/","applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires a modern web browser","description":"Analyze a supported public YouTube, Instagram, Threads, Douyin or Xiaohongshu URL and download available media files.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"isAccessibleForFree":true},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Do I need to choose the platform before pasting a link?","acceptedAnswer":{"@type":"Answer","text":"No. Paste a supported public URL into the single input. The server detects YouTube, Instagram, Threads, Douyin or Xiaohongshu automatically."}},{"@type":"Question","name":"주소는 어디에 붙여넣나요?","acceptedAnswer":{"@type":"Answer","text":"사이트 첫 화면의 큰 URL 입력칸에 YouTube, Instagram, Threads, Douyin 또는 Xiaohongshu의 공개 게시물 주소를 붙여넣고 Analyze link 버튼을 누르면 됩니다."}},{"@type":"Question","name":"Does AVOCADOSS support private posts or DRM-protected media?","acceptedAnswer":{"@type":"Answer","text":"No. The service is limited to media that is publicly accessible and does not bypass private-account restrictions, paywalls, DRM or other access controls."}},{"@type":"Question","name":"Are downloaded files stored permanently?","acceptedAnswer":{"@type":"Answer","text":"No permanent user media library is provided. Files that require server-side preparation are temporary and are removed after delivery."}}]}]}</script>
 </head>
 <body data-platform="">
 <header class="site-header">
@@ -40,7 +40,7 @@
           <div class="input-shell">
             <div class="input-box">
               <span class="input-icon" aria-hidden="true">↗</span>
-              <input class="url-input" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste a YouTube, Instagram, Threads, Douyin or Xiaohongshu URL" aria-label="Public social media URL" required>
+              <input class="url-input" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="여기에 영상/게시물 주소를 붙여넣으세요 · Paste social-media URL" aria-label="Public social media URL" required>
               <button class="utility-btn" data-clear type="button">Clear</button>
               <button class="utility-btn" data-paste type="button">Paste</button>
             </div>
@@ -57,6 +57,7 @@
             </div>
           </div>
         </form>
+        <div class="notice" lang="ko"><strong>사용 방법:</strong> YouTube·Instagram·Threads·Douyin·샤오홍슈에서 원하는 공개 영상/게시물의 <strong>공유 주소를 복사</strong>한 뒤, 바로 위의 큰 입력칸에 <strong>주소를 붙여넣고 Analyze link(분석하기)</strong>를 누르세요. 사이트가 플랫폼을 자동으로 감지하며, 결과가 나오면 원하는 영상·이미지·썸네일 옆의 Download 버튼을 누르면 됩니다.</div>
         <div class="status" data-status role="status" aria-live="polite"></div>
         <div class="ad-slot" data-ad-slot="leaderboard"></div>
       </div>
@@ -121,7 +122,8 @@
   <section class="section">
     <div class="wrap faq">
       <div class="section-head"><h2>Frequently asked questions</h2><p class="lead">Direct answers to the questions that matter before you paste a link.</p></div>
-      <details open><summary>Do I have to choose YouTube, Instagram, Threads, Douyin or Xiaohongshu first?</summary><p>No. The URL is detected automatically. The platform labels under the input are status indicators, not tabs you need to navigate.</p></details>
+      <details open><summary>주소는 어디에 붙여넣으면 되나요?</summary><p lang="ko">페이지 맨 위의 큰 URL 입력칸에 붙여넣으면 됩니다. 플랫폼을 고를 필요 없이 주소만 넣고 Analyze link를 누르면 자동 감지됩니다.</p></details>
+      <details><summary>Do I have to choose YouTube, Instagram, Threads, Douyin or Xiaohongshu first?</summary><p>No. The URL is detected automatically. The platform labels under the input are status indicators, not tabs you need to navigate.</p></details>
       <details><summary>Why can a public link still fail?</summary><p>The post may have been deleted, region-restricted, login-gated, rate-limited, or changed by the source platform. Short share links can also expire. AVOCADOSS does not bypass access controls.</p></details>
       <details><summary>Does the site keep a permanent history of my downloaded media?</summary><p>No permanent media library is part of the downloader. Files generated for delivery are temporary and are removed after the response lifecycle.</p></details>
       <details><summary>Can I use the downloader for copyrighted media?</summary><p>Use it only where you own the media, have permission or a license, or otherwise have a lawful right to save it. Source-platform names and trademarks belong to their respective owners.</p></details>
@@ -144,7 +146,7 @@
     <div class="footer-bottom"><span>© 2026 avocadoss.co.kr</span><div class="footer-links"><a href="/robots.txt">Robots</a><a href="/sitemap.xml">Sitemap</a><a href="/llms.txt">AI crawler guide</a></div></div>
   </div>
 </footer>
-<script src="/monetization.js?v=20260909b" defer></script>
-<script src="/app.js?v=20260909b" defer></script>
+<script src="/monetization.js?v=20260909c" defer></script>
+<script src="/app.js?v=20260909c" defer></script>
 </body>
 </html>
