@@ -23,6 +23,8 @@ _HOSTS: dict[str, PlatformRoute] = {
     "www.xiaohongshu.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "xhslink.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "www.xhslink.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
+    "xhslink.cn": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
+    "www.xhslink.cn": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "threads.net": PlatformRoute("threads", "threads.com"),
     "www.threads.net": PlatformRoute("threads", "threads.com"),
     "threads.com": PlatformRoute("threads", "threads.com"),
