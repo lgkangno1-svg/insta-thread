@@ -9,7 +9,9 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.background import BackgroundTask
-from starlette.responses import FileResponse, JSONResponse, RedirectResponse
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from starlette.staticfiles import StaticFiles
 
 from .jobs import store
@@ -19,9 +21,26 @@ from .services import downloader
 
 app = FastAPI(
     title="insta-thread API",
-    version="0.5.0",
+    version="0.6.0",
     description="Unified analyzer/downloader for public media from five supported platforms.",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+
+_ALLOWED_HOSTS = [
+    "download.avocadoss.co.kr",
+    "youtube.avocadoss.co.kr",
+    "insta.avocadoss.co.kr",
+    "thread.avocadoss.co.kr",
+    "douyin.avocadoss.co.kr",
+    "xiaohongshu.avocadoss.co.kr",
+    "localhost",
+    "127.0.0.1",
+    "testserver",
+]
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=_ALLOWED_HOSTS)
+app.add_middleware(GZipMiddleware, minimum_size=1200, compresslevel=5)
 
 origins = [x.strip() for x in os.getenv(
     "CORS_ORIGINS",
@@ -33,6 +52,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+    max_age=600,
 )
 
 # Nginx applies the same limits in the Docker deployment. Keep an application-level
@@ -52,6 +72,37 @@ def _rate_class(request: Request) -> tuple[str, int] | None:
     return None
 
 
+def _apply_security_headers(request: Request, response: Response) -> Response:
+    path = request.url.path
+    host = (request.headers.get("host") or "").split(":", 1)[0].lower()
+
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
+    response.headers.setdefault("Origin-Agent-Cluster", "?1")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+        "form-action 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
+        "img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self'; "
+        "upgrade-insecure-requests",
+    )
+
+    if host.endswith(".avocadoss.co.kr"):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+    if path.startswith("/api/") or path == "/health":
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    elif path.endswith((".css", ".js", ".svg", ".webmanifest")):
+        response.headers.setdefault("Cache-Control", "public, max-age=300, must-revalidate")
+    else:
+        response.headers.setdefault("Cache-Control", "public, max-age=0, must-revalidate")
+    return response
+
+
 @app.middleware("http")
 async def production_guards(request: Request, call_next):
     host = (request.headers.get("host") or "").split(":", 1)[0].lower()
@@ -63,7 +114,7 @@ async def production_guards(request: Request, call_next):
         "xiaohongshu.avocadoss.co.kr": "https://download.avocadoss.co.kr/xiaohongshu-downloader",
     }
     if host in aliases:
-        return RedirectResponse(aliases[host], status_code=301)
+        return _apply_security_headers(request, RedirectResponse(aliases[host], status_code=301))
 
     if os.getenv("APP_RATE_LIMIT", "true").strip().lower() in {"1", "true", "yes", "on"}:
         classified = _rate_class(request)
@@ -77,15 +128,16 @@ async def production_guards(request: Request, call_next):
                 while window and window[0] <= now - 60:
                     window.popleft()
                 if len(window) >= limit:
-                    return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429, headers={"Retry-After": "60"})
+                    limited = JSONResponse(
+                        {"detail": "Rate limit exceeded"},
+                        status_code=429,
+                        headers={"Retry-After": "60"},
+                    )
+                    return _apply_security_headers(request, limited)
                 window.append(now)
 
     response = await call_next(request)
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-    return response
+    return _apply_security_headers(request, response)
 
 
 @app.get("/health", response_model=HealthResponse)
