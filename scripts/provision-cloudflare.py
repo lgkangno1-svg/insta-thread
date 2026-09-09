@@ -4,13 +4,17 @@
 Required environment:
   CLOUDFLARE_API_TOKEN
 
+Optional environment:
+  CLOUDFLARE_ACCOUNT_ID
+  CLOUDFLARE_ORIGIN_SERVICE (default: http://web:80)
+
 The API token should be scoped to avocadoss.co.kr and include:
   - Account / Cloudflare Tunnel / Edit
   - Zone / DNS / Edit
   - Zone / Zone / Read (used to discover zone + account IDs)
 
 The script never prints the API token or Tunnel token. The Tunnel token is written
-into .env with mode 0600 so Docker Compose can start only this project's connector.
+into .env with mode 0600 so only this project's connector needs the tunnel credential.
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ HOSTNAMES = [
     "douyin.avocadoss.co.kr",
     "xiaohongshu.avocadoss.co.kr",
 ]
-SERVICE = "http://web:80"
+SERVICE = os.getenv("CLOUDFLARE_ORIGIN_SERVICE", "http://web:80").strip() or "http://web:80"
 ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
@@ -49,9 +53,21 @@ def truthy(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def validate_origin_service() -> None:
+    parsed = urllib.parse.urlparse(SERVICE)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        fail("CLOUDFLARE_ORIGIN_SERVICE must be an http(s) origin URL")
+    # This project intentionally supports either its Compose service or a rootless
+    # loopback origin. Refuse arbitrary remote origins so a CI variable cannot
+    # silently repoint the public download host elsewhere.
+    if parsed.hostname not in {"web", "localhost", "127.0.0.1", "::1"}:
+        fail("CLOUDFLARE_ORIGIN_SERVICE must target web or localhost")
+
+
 TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
 if not TOKEN:
     fail("CLOUDFLARE_API_TOKEN is required")
+validate_origin_service()
 
 
 def request(method: str, path: str, body: dict | None = None, query: dict | None = None):
@@ -66,7 +82,7 @@ def request(method: str, path: str, body: dict | None = None, query: dict | None
         headers={
             "Authorization": f"Bearer {TOKEN}",
             "Content-Type": "application/json",
-            "User-Agent": "insta-thread-cloudflare-provision/1.0",
+            "User-Agent": "insta-thread-cloudflare-provision/1.1",
         },
     )
     try:
@@ -121,10 +137,7 @@ def get_or_create_tunnel(account_id: str) -> str:
 
 
 def protect_existing_tunnel_config(account_id: str, tunnel_id: str) -> None:
-    try:
-        existing = request("GET", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations")
-    except SystemExit:
-        raise
+    existing = request("GET", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations")
     config = (existing or {}).get("config") if isinstance(existing, dict) else None
     ingress = (config or {}).get("ingress") if isinstance(config, dict) else None
     if not isinstance(ingress, list):
@@ -232,6 +245,7 @@ def main() -> None:
     write_env_tunnel_token(tunnel_token)
     print(f"Cloudflare provisioned dedicated tunnel: {TUNNEL_NAME} ({tunnel_id})")
     print(f"Tunnel token written securely to: {ENV_FILE}")
+    print(f"Configured origin service: {SERVICE}")
     print("No existing unrelated tunnel service was modified.")
 
 
