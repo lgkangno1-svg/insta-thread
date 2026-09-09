@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LOCAL_BASE="${LOCAL_BASE:-http://127.0.0.1:8080}"
+WEB_BIND_PORT="${WEB_BIND_PORT:-}"
+if [[ -z "$WEB_BIND_PORT" && -f .env ]]; then
+  WEB_BIND_PORT="$(sed -n 's/^WEB_BIND_PORT=//p' .env | tail -n 1 | tr -d '[:space:]')"
+fi
+WEB_BIND_PORT="${WEB_BIND_PORT:-8080}"
+LOCAL_BASE="${LOCAL_BASE:-http://127.0.0.1:${WEB_BIND_PORT}}"
 PUBLIC_BASE="${PUBLIC_BASE:-https://download.avocadoss.co.kr}"
 PUBLIC_SAMPLES="${PUBLIC_SAMPLES:-5}"
 
