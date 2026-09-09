@@ -17,6 +17,8 @@ def test_threads_selects_exact_target_post_not_recommendation():
     flat = threads_adapter._flatten_assets(post)
     assert any(x['url'].endswith('/target.mp4') for x in flat)
     assert all(not x['url'].endswith('/other.mp4') for x in flat)
+    assert any(x['kind'] == 'video' for x in flat)
+    assert any(x['kind'] == 'thumbnail' and x['url'].endswith('/cover.jpg') for x in flat)
 
 
 def test_threads_share_link_uses_canonical_target():
@@ -25,3 +27,24 @@ def test_threads_share_link_uses_canonical_target():
     post, code = threads_adapter._extract_target('https://www.threads.com/share/xyz/', html)
     assert code == 'ABC999'
     assert post['code'] == 'ABC999'
+    flat = threads_adapter._flatten_assets(post)
+    assert flat
+    assert all(x['kind'] == 'image' for x in flat)
+    assert flat[0]['url'].endswith('/a.jpg')
+
+
+def test_threads_carousel_classifies_each_unit_by_media_type():
+    post = {
+        'code': 'MIXED1',
+        'carousel_media': [
+            {
+                'video_versions': [{'url': 'https://cdn.example/v.mp4'}],
+                'image_versions2': {'candidates': [{'url': 'https://cdn.example/v-cover.jpg', 'width': 720, 'height': 1280}]},
+            },
+            {
+                'image_versions2': {'candidates': [{'url': 'https://cdn.example/photo.jpg', 'width': 1080, 'height': 1080}]},
+            },
+        ],
+    }
+    flat = threads_adapter._flatten_assets(post)
+    assert [x['kind'] for x in flat] == ['video', 'thumbnail', 'image']
