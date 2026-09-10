@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+from .platforms.router import extract_supported_url
 from .security import verify_analysis_token
 from .services import downloader
 
@@ -90,13 +91,14 @@ class JobStore:
 
     def create(self, url: str, asset_id: str, analysis_token: str) -> Job:
         self.cleanup()
-        downloader.validate_asset_id(url, asset_id)
-        verify_analysis_token(analysis_token, url, asset_id)
+        normalized_url = extract_supported_url(url)
+        downloader.validate_asset_id(normalized_url, asset_id)
+        verify_analysis_token(analysis_token, normalized_url, asset_id)
         self._assert_disk_capacity()
         with self.lock:
             if len(self.jobs) >= self.max_jobs:
                 raise HTTPException(status_code=503, detail="Download queue is full; try again shortly")
-            job = Job(id=uuid.uuid4().hex, url=url, asset_id=asset_id)
+            job = Job(id=uuid.uuid4().hex, url=normalized_url, asset_id=asset_id)
             self.jobs[job.id] = job
         self.executor.submit(self._run, job.id)
         return job
@@ -120,7 +122,7 @@ class JobStore:
                 current.tmpdir = tmpdir
                 current.status = "ready"
                 current.updated_at = time.time()
-        except Exception as exc:  # normalize framework/extractor failures for polling clients
+        except Exception as exc:
             detail = getattr(exc, "detail", None) or str(exc)
             with self.lock:
                 current = self.jobs.get(job_id)
