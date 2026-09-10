@@ -15,13 +15,14 @@ from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Re
 from starlette.staticfiles import StaticFiles
 
 from .jobs import store
-from .models import AnalyzeRequest, AnalyzeResponse, DownloadRequest, HealthResponse
+from .models import AnalyzeRequest, AnalyzeResponse, DownloadRequest, HealthResponse, MonetizationEventRequest
+from .monetization import campaign_config, record_event
 from .security import verify_analysis_token
 from .services import downloader
 
 app = FastAPI(
     title="insta-thread API",
-    version="0.6.0",
+    version="0.7.0",
     description="Unified analyzer/downloader for public media from five supported platforms.",
     docs_url=None,
     redoc_url=None,
@@ -67,6 +68,8 @@ def _rate_class(request: Request) -> tuple[str, int] | None:
         return "analyze", 20
     if request.method == "POST" and path == "/api/v1/jobs":
         return "job", 12
+    if request.method == "POST" and path == "/api/v1/monetization/events":
+        return "monetization-event", 180
     if request.method == "GET" and path.startswith("/api/v1/jobs/") and not path.endswith("/file"):
         return "poll", 120
     return None
@@ -143,6 +146,20 @@ async def production_guards(request: Request, call_next):
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
+
+
+@app.get("/api/v1/monetization/config")
+def get_monetization_config():
+    # This endpoint intentionally exposes only public campaign presentation values.
+    # Affiliate network credentials and payout information must never be sent here.
+    return campaign_config()
+
+
+@app.post("/api/v1/monetization/events", status_code=204)
+def create_monetization_event(payload: MonetizationEventRequest):
+    # Aggregate counters only. No source URL, username, cookie or IP is persisted.
+    record_event(payload.event, payload.campaign_id, payload.platform)
+    return Response(status_code=204)
 
 
 @app.post("/api/v1/analyze", response_model=AnalyzeResponse)
