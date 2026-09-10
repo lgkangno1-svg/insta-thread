@@ -21,13 +21,13 @@
     instagram: 'Instagram',
     threads: 'Threads',
     douyin: 'Douyin',
-    xiaohongshu: 'Xiaohongshu'
+    xiaohongshu: 'Xiaohongshu / RedNote'
   };
   const transientStatuses = new Set([429, 502, 503, 504]);
   const trailingSharePunctuation = /[.,;:!?，。；：！？、)\]}>】》」』）”’"]+$/u;
   const zeroWidth = /[\u200B-\u200D\u2060\uFEFF]/g;
   const explicitUrlPattern = /https?:\/\/[^\s<>"'`]+/gi;
-  const bareUrlPattern = /(?<![\w@])(?:(?:www|m|music|v)\.)?(?:youtube\.com|instagram\.com|instagr\.am|xiaohongshu\.com|xhslink\.com|xhslink\.cn|threads\.com|threads\.net|douyin\.com|iesdouyin\.com)\/[^\s<>"'`]+/gi;
+  const bareUrlPattern = /(?<![\w@])(?:(?:www|m|music|v)\.)?(?:youtube\.com|instagram\.com|instagr\.am|xiaohongshu\.com|rednote\.com|xhslink\.com|xhslink\.cn|threads\.com|threads\.net|douyin\.com|iesdouyin\.com)\/[^\s<>"'`]+/gi;
 
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -104,7 +104,7 @@
       if (host === 'instagr.am' || host === 'instagram.com' || host.endsWith('.instagram.com')) return 'instagram';
       if (host === 'threads.com' || host === 'threads.net' || host.endsWith('.threads.com') || host.endsWith('.threads.net')) return 'threads';
       if (host === 'iesdouyin.com' || host === 'douyin.com' || host.endsWith('.douyin.com')) return 'douyin';
-      if (host === 'xhslink.com' || host === 'xhslink.cn' || host === 'xiaohongshu.com' || host.endsWith('.xiaohongshu.com')) return 'xiaohongshu';
+      if (host === 'xhslink.com' || host === 'xhslink.cn' || host === 'xiaohongshu.com' || host.endsWith('.xiaohongshu.com') || host === 'rednote.com' || host.endsWith('.rednote.com')) return 'xiaohongshu';
     } catch (_) {}
     return '';
   };
@@ -151,7 +151,7 @@
       const fromMessage = extracted && extracted !== value;
       setDetection(`${platformLabels[platform]} detected${fromMessage ? ' inside copied share text' : ' automatically'}`, platform);
     } else {
-      setDetection('Supported: YouTube, Instagram, Threads, Douyin and Xiaohongshu public share links.');
+      setDetection('Supported: YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote public share links.');
     }
   };
 
@@ -290,7 +290,6 @@
       return;
     }
 
-    // Show the exact URL that will be sent; copied captions/titles are discarded.
     if (raw !== url) input.value = url;
     button.disabled = true;
     button.textContent = 'Analyzing…';
