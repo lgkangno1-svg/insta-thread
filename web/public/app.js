@@ -23,6 +23,57 @@
     douyin: 'Douyin',
     xiaohongshu: 'Xiaohongshu'
   };
+  const transientStatuses = new Set([429, 502, 503, 504]);
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  const parseJson = async response => {
+    try {
+      return await response.json();
+    } catch (_) {
+      return {};
+    }
+  };
+
+  async function requestJson(url, options = {}, {timeoutMs = 70000, retries = 0} = {}) {
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, {...options, signal: controller.signal});
+        const data = await parseJson(response);
+        if (!response.ok) {
+          const error = new Error(data.detail || `Request failed (${response.status})`);
+          error.status = response.status;
+          if (attempt < retries && transientStatuses.has(response.status)) {
+            await sleep(700 * (attempt + 1));
+            lastError = error;
+            continue;
+          }
+          throw error;
+        }
+        return {response, data};
+      } catch (error) {
+        const normalized = error && error.name === 'AbortError'
+          ? new Error('The server took too long to respond. Please try again.')
+          : error;
+        lastError = normalized;
+        if (attempt < retries && (!error.status || transientStatuses.has(error.status))) {
+          await sleep(700 * (attempt + 1));
+          continue;
+        }
+        throw normalized;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastError || new Error('Request failed.');
+  }
+
+  const track = eventName => {
+    if (window.trackMonetizationEvent) window.trackMonetizationEvent(eventName);
+  };
 
   const setStatus = (text, error = false) => {
     if (!status) return;
@@ -82,6 +133,7 @@
     btn.disabled = true;
     btn.textContent = 'Queued…';
     setStatus('Preparing your file securely…');
+    let started = false;
     try {
       if (window.runSponsorGate) {
         await window.runSponsorGate({
@@ -90,22 +142,39 @@
         });
       }
 
-      const res = await fetch('/api/v1/jobs', {
+      track('download_started');
+      started = true;
+      const {data: created} = await requestJson('/api/v1/jobs', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({url, asset_id: assetId, analysis_token: analysisToken})
-      });
-      const created = await res.json();
-      if (!res.ok) throw new Error(created.detail || `Could not start download (${res.status})`);
+      }, {timeoutMs: 25000, retries: 0});
 
-      const started = Date.now();
-      while (Date.now() - started < 12 * 60 * 1000) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        const statusRes = await fetch(`/api/v1/jobs/${created.id}`, {cache: 'no-store'});
-        const job = await statusRes.json();
+      const pollStarted = Date.now();
+      let transientFailures = 0;
+      while (Date.now() - pollStarted < 12 * 60 * 1000) {
+        await sleep(1500);
+        let statusRes;
+        try {
+          statusRes = await fetch(`/api/v1/jobs/${created.id}`, {cache: 'no-store'});
+        } catch (_) {
+          transientFailures += 1;
+          if (transientFailures <= 8) continue;
+          throw new Error('Network connection was interrupted while preparing the download.');
+        }
+
+        if (transientStatuses.has(statusRes.status)) {
+          transientFailures += 1;
+          if (transientFailures <= 8) continue;
+        } else {
+          transientFailures = 0;
+        }
+
+        const job = await parseJson(statusRes);
         if (!statusRes.ok) throw new Error(job.detail || 'Download job is no longer available');
         if (job.status === 'error') throw new Error(job.error || 'Download preparation failed');
         if (job.status === 'ready') {
+          track('download_ready');
           const a = document.createElement('a');
           a.href = job.download_url;
           a.rel = 'nofollow';
@@ -119,6 +188,7 @@
       }
       throw new Error('Preparation timed out. Retry the link or choose a smaller video quality.');
     } catch (err) {
+      if (started) track('download_error');
       setStatus(err.message || 'Download failed.', true);
     } finally {
       btn.disabled = false;
@@ -192,13 +262,11 @@
     setStatus('Analyzing the public link…');
 
     try {
-      const res = await fetch('/api/v1/analyze', {
+      const {data} = await requestJson('/api/v1/analyze', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({url})
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || `Analyze failed (${res.status})`);
+      }, {timeoutMs: 70000, retries: 1});
       if (!data.analysis_token) throw new Error('The server did not issue a download ticket. Analyze again.');
       if (!Array.isArray(data.assets) || !data.assets.length) throw new Error('No downloadable public media was found.');
 

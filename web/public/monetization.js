@@ -1,8 +1,8 @@
 /*
   Direct sponsor / affiliate gate.
-  Disabled until an approved campaign URL is configured.
-  IMPORTANT: never require a normal ad click to unlock a download and never style
-  sponsor links as fake download buttons.
+  Campaign presentation is loaded from the first-party API so campaigns can be
+  changed without rebuilding the frontend. Never require a normal ad click to
+  unlock a download and never style sponsor links as fake download buttons.
 */
 window.AVOCADOSS_MONETIZATION = {
   enabled: false,
@@ -11,7 +11,7 @@ window.AVOCADOSS_MONETIZATION = {
   campaignId: '',
   sponsorLabel: 'Sponsored message',
   sponsorTitle: 'A short message from our sponsor',
-  sponsorText: 'Configure an approved direct sponsor or affiliate campaign here.',
+  sponsorText: '',
   sponsorUrl: '',
   sponsorCta: 'Visit sponsor',
   affiliateDisclosure: 'Some links may be affiliate links. A purchase may generate a commission at no extra cost to you.'
@@ -35,8 +35,35 @@ function monetizationPlatform() {
   if (host.startsWith('thread.')) return 'threads';
   if (host.startsWith('douyin.')) return 'douyin';
   if (host.startsWith('xiaohongshu.')) return 'xiaohongshu';
+
+  const path = String(window.location.pathname || '').toLowerCase();
+  if (path.includes('youtube')) return 'youtube';
+  if (path.includes('instagram')) return 'instagram';
+  if (path.includes('threads')) return 'threads';
+  if (path.includes('douyin')) return 'douyin';
+  if (path.includes('xiaohongshu')) return 'xiaohongshu';
   return 'download';
 }
+
+let monetizationConfigPromise;
+window.loadMonetizationConfig = function loadMonetizationConfig() {
+  if (monetizationConfigPromise) return monetizationConfigPromise;
+  monetizationConfigPromise = fetch('/api/v1/monetization/config', {cache: 'no-store'})
+    .then(async response => {
+      if (!response.ok) throw new Error('campaign config unavailable');
+      const remote = await response.json();
+      const sponsorUrl = safeSponsorUrl(remote.sponsorUrl || '');
+      window.AVOCADOSS_MONETIZATION = {
+        ...window.AVOCADOSS_MONETIZATION,
+        ...remote,
+        enabled: Boolean(remote.enabled && remote.campaignId && sponsorUrl),
+        sponsorUrl
+      };
+      return window.AVOCADOSS_MONETIZATION;
+    })
+    .catch(() => window.AVOCADOSS_MONETIZATION);
+  return monetizationConfigPromise;
+};
 
 window.trackMonetizationEvent = function trackMonetizationEvent(eventName, extra = {}) {
   const c = window.AVOCADOSS_MONETIZATION || {};
@@ -49,35 +76,50 @@ window.trackMonetizationEvent = function trackMonetizationEvent(eventName, extra
   };
 
   try {
-    window.dispatchEvent(new CustomEvent('avocadoss:monetization', { detail }));
+    window.dispatchEvent(new CustomEvent('avocadoss:monetization', {detail}));
   } catch (_) {}
 
-  // Compatible with Google Tag Manager / other analytics integrations if one is
-  // added later. No analytics vendor is required for the downloader to work.
   if (Array.isArray(window.dataLayer)) {
-    window.dataLayer.push({ event: `monetization_${eventName}`, ...detail });
+    window.dataLayer.push({event: `monetization_${eventName}`, ...detail});
   }
 
-  // Small first-party counters make campaign QA possible before an analytics
-  // provider is connected. They contain no URL, account identifier or secret.
   try {
     const key = `avocadossMonetization:${detail.campaignId || 'unconfigured'}:${detail.platform}:${eventName}`;
     localStorage.setItem(key, String(Number(localStorage.getItem(key) || '0') + 1));
   } catch (_) {}
+
+  const payload = JSON.stringify({
+    event: eventName,
+    campaign_id: detail.campaignId,
+    platform: detail.platform
+  });
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], {type: 'application/json'});
+      if (navigator.sendBeacon('/api/v1/monetization/events', blob)) return;
+    }
+  } catch (_) {}
+  fetch('/api/v1/monetization/events', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: payload,
+    keepalive: true
+  }).catch(() => {});
 };
 
-window.runSponsorGate = function runSponsorGate(options = {}) {
+window.runSponsorGate = async function runSponsorGate(options = {}) {
+  await window.loadMonetizationConfig();
   const c = window.AVOCADOSS_MONETIZATION || {};
   const forced = Boolean(options.force);
   const sponsorUrl = safeSponsorUrl(c.sponsorUrl);
-  const campaignConfigured = Boolean(sponsorUrl && c.campaignId);
-  const enabled = (Boolean(c.enabled) && campaignConfigured) || forced;
-  if (!enabled) return Promise.resolve();
+  const campaignConfigured = Boolean(c.enabled && sponsorUrl && c.campaignId);
+  const enabled = campaignConfigured || forced;
+  if (!enabled) return;
 
   const count = Number(sessionStorage.getItem('avocadossDownloadCount') || '0') + 1;
   sessionStorage.setItem('avocadossDownloadCount', String(count));
   const frequency = Math.max(1, Number(c.frequency || 1));
-  if (!forced && count % frequency !== 0) return Promise.resolve();
+  if (!forced && count % frequency !== 0) return;
 
   return new Promise(resolve => {
     const overlay = document.createElement('div');
@@ -125,10 +167,10 @@ window.runSponsorGate = function runSponsorGate(options = {}) {
     modal.append(label, title, text, disclosure, actions);
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    window.trackMonetizationEvent(campaignConfigured ? 'impression' : 'gate');
+    if (campaignConfigured) window.trackMonetizationEvent('impression');
 
     const finish = () => {
-      window.trackMonetizationEvent(campaignConfigured ? 'continue' : 'gate_continue');
+      if (campaignConfigured) window.trackMonetizationEvent('continue');
       overlay.remove();
       resolve();
     };
@@ -151,3 +193,6 @@ window.runSponsorGate = function runSponsorGate(options = {}) {
     }, 1000);
   });
 };
+
+// Warm the public config without blocking page rendering.
+window.loadMonetizationConfig();

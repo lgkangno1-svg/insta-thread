@@ -28,11 +28,23 @@ services:
       ANALYSIS_TOKEN_TTL_SECONDS: ${ANALYSIS_TOKEN_TTL_SECONDS:-900}
       SPONSOR_GATE_ENABLED: ${SPONSOR_GATE_ENABLED:-false}
       SPONSOR_GATE_SECONDS: ${SPONSOR_GATE_SECONDS:-4}
+      MONETIZATION_ENABLED: ${MONETIZATION_ENABLED:-false}
+      MONETIZATION_CAMPAIGN_ID: ${MONETIZATION_CAMPAIGN_ID:-}
+      MONETIZATION_SPONSOR_URL: ${MONETIZATION_SPONSOR_URL:-}
+      MONETIZATION_DELAY_SECONDS: ${MONETIZATION_DELAY_SECONDS:-4}
+      MONETIZATION_FREQUENCY: ${MONETIZATION_FREQUENCY:-1}
+      MONETIZATION_SPONSOR_LABEL: ${MONETIZATION_SPONSOR_LABEL:-Sponsored message}
+      MONETIZATION_SPONSOR_TITLE: ${MONETIZATION_SPONSOR_TITLE:-A short message from our sponsor}
+      MONETIZATION_SPONSOR_TEXT: ${MONETIZATION_SPONSOR_TEXT:-}
+      MONETIZATION_SPONSOR_CTA: ${MONETIZATION_SPONSOR_CTA:-Visit sponsor}
+      MONETIZATION_DISCLOSURE: ${MONETIZATION_DISCLOSURE:-Some links may be affiliate links. A purchase may generate a commission at no extra cost to you.}
+      MONETIZATION_METRICS_FILE: ${MONETIZATION_METRICS_FILE:-/data/metrics/monetization.json}
       ENABLE_DIRECT_DOWNLOAD: ${ENABLE_DIRECT_DOWNLOAD:-false}
     depends_on:
       - bgutil-provider
     volumes:
       - ./data/tmp:/data/tmp
+      - ./data/metrics:/data/metrics
 
   bgutil-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:latest
