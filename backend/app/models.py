@@ -50,6 +50,7 @@ class AnalyzeResponse(BaseModel):
     title: str | None = None
     author: str | None = None
     webpage_url: str
+    source_url: str | None = None
     preview_url: str | None = None
     assets: list[MediaAsset]
     analysis_token: str | None = None
