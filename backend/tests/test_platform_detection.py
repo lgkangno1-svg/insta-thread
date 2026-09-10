@@ -28,15 +28,15 @@ def test_supported_platforms(url, expected):
     assert detect_platform(url).platform == expected
 
 
-def test_extracts_xiaohongshu_url_from_real_pc_share_text():
+def test_extracts_xiaohongshu_url_from_pc_share_text_and_preserves_token_padding():
     raw = (
-        "54 [叠加收纳不浪费，橱柜又多出一倍空间‼️ - 小羊的收纳日记| rednote - 나만의 라이프스타일을 발견하고 공유하세요] "
-        "vnHQksxeKq0t2Gq https://www.xiaohongshu.com/discovery/item/6a8cfcaa000000002a026526?"
-        "source=webshare&xhsshare=pc_web&xsec_token=AB8dGuximOqSMVdXlsj5lSKfftTq3QNIcY4KThVuzRt_c=&xsec_source=pc_share"
+        "54 [叠加收纳不浪费，橱柜又多出一倍空间‼️ - creator | rednote] "
+        "sharecode https://www.xiaohongshu.com/discovery/item/6a8cfcaa000000002a026526?"
+        "source=webshare&xhsshare=pc_web&xsec_token=example-token-with-padding=&xsec_source=pc_share"
     )
     extracted = extract_supported_url(raw)
     assert extracted.startswith("https://www.xiaohongshu.com/discovery/item/6a8cfcaa000000002a026526?")
-    assert "xsec_token=AB8dGuximOqSMVdXlsj5lSKfftTq3QNIcY4KThVuzRt_c=" in extracted
+    assert "xsec_token=example-token-with-padding=" in extracted
     assert extracted.endswith("xsec_source=pc_share")
 
 
