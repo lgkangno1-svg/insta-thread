@@ -19,9 +19,11 @@ from app.platforms.router import detect_platform, extract_supported_url
         ("https://www.threads.com/@name/post/abc", "threads"),
         ("https://www.threads.com/share/abc", "threads"),
         ("https://www.threads.net/@name/post/abc", "threads"),
-        ("https://www.douyin.com/video/123", "douyin"),
+        ("https://www.douyin.com/video/7534679152504376595", "douyin"),
+        ("https://www.douyin.com/note/7534679152504376595", "douyin"),
+        ("https://www.douyin.com/jingxuan?modal_id=7534679152504376595", "douyin"),
         ("https://v.douyin.com/abc/", "douyin"),
-        ("https://www.iesdouyin.com/share/video/123", "douyin"),
+        ("https://www.iesdouyin.com/share/video/7534679152504376595", "douyin"),
     ],
 )
 def test_supported_platforms(url, expected):
@@ -73,6 +75,16 @@ def test_rednote_note_url_maps_to_xiaohongshu_and_keeps_query():
 
 def test_bare_xhs_note_id_is_accepted():
     assert extract_supported_url("6A73DFFA000000002C006EAD") == "https://www.xiaohongshu.com/explore/6a73dffa000000002c006ead"
+
+
+def test_douyin_modal_note_legacy_and_bare_ids_are_canonicalized():
+    aweme_id = "7534679152504376595"
+    expected = f"https://www.douyin.com/video/{aweme_id}"
+    assert extract_supported_url(f"https://www.douyin.com/jingxuan?modal_id={aweme_id}") == expected
+    assert extract_supported_url(f"https://www.douyin.com/discover?modal_id={aweme_id}") == expected
+    assert extract_supported_url(f"https://www.douyin.com/note/{aweme_id}") == expected
+    assert extract_supported_url(f"https://www.iesdouyin.com/share/video/{aweme_id}") == expected
+    assert extract_supported_url(aweme_id) == expected
 
 
 def test_skips_unrelated_url_and_uses_supported_url():
