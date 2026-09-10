@@ -28,6 +28,9 @@ _HOSTS: dict[str, PlatformRoute] = {
     "xiaohongshu.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "www.xiaohongshu.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "m.xiaohongshu.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
+    "rednote.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
+    "www.rednote.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
+    "m.rednote.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "xhslink.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "www.xhslink.com": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
     "xhslink.cn": PlatformRoute("xiaohongshu", "xiaohongshu.com"),
@@ -46,8 +49,8 @@ _HOSTS: dict[str, PlatformRoute] = {
 
 _HTTP_URL_RE = re.compile(r"https?://[^\s<>\"'`]+", re.IGNORECASE)
 _BARE_HOST_RE = re.compile(
-    r"(?<![\w@])(?:www\.|m\.|music\.)?(?:youtube\.com|instagram\.com|instagr\.am|"
-    r"xiaohongshu\.com|xhslink\.com|xhslink\.cn|threads\.com|threads\.net|"
+    r"(?<![\w@])(?:www\.|m\.|music\.|v\.)?(?:youtube\.com|instagram\.com|instagr\.am|"
+    r"xiaohongshu\.com|rednote\.com|xhslink\.com|xhslink\.cn|threads\.com|threads\.net|"
     r"douyin\.com|iesdouyin\.com)/[^\s<>\"'`]+",
     re.IGNORECASE,
 )
@@ -75,12 +78,17 @@ def _route_for_url(candidate: str) -> tuple[str, PlatformRoute] | None:
 
 def _canonicalize(candidate: str, route: PlatformRoute) -> str:
     parsed = urlparse(candidate)
-    if route.platform == "xiaohongshu" and (parsed.hostname or "").lower().endswith("xiaohongshu.com"):
-        profile_match = _XHS_PROFILE_NOTE_RE.match(parsed.path)
-        if profile_match:
-            note_id = profile_match.group(1).lower()
-            parsed = parsed._replace(netloc="www.xiaohongshu.com", path=f"/explore/{note_id}")
-            return urlunparse(parsed)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if route.platform == "xiaohongshu":
+        if host == "rednote.com" or host.endswith(".rednote.com"):
+            parsed = parsed._replace(netloc="www.xiaohongshu.com")
+            host = "www.xiaohongshu.com"
+        if host == "xiaohongshu.com" or host.endswith(".xiaohongshu.com"):
+            profile_match = _XHS_PROFILE_NOTE_RE.match(parsed.path)
+            if profile_match:
+                note_id = profile_match.group(1).lower()
+                parsed = parsed._replace(netloc="www.xiaohongshu.com", path=f"/explore/{note_id}")
+        return urlunparse(parsed)
     return candidate
 
 
