@@ -1,0 +1,103 @@
+name: Agent Browser Live QA
+
+on:
+  push:
+    branches: [ops/agent-browser-live-qa-20260911]
+    paths:
+      - '.github/workflows/agent-browser-live-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install agent-browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g agent-browser@latest
+          agent-browser --version
+          agent-browser install --with-deps
+
+      - name: Run live browser QA
+        shell: bash
+        run: |
+          set -u
+          mkdir -p qa
+          TARGET='https://download.avocadoss.co.kr'
+          {
+            echo "target=$TARGET"
+            echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > qa/summary.txt
+
+          set +e
+          agent-browser open "$TARGET" > qa/open.txt 2>&1
+          OPEN_RC=$?
+          echo "open_rc=$OPEN_RC" >> qa/summary.txt
+          if [ "$OPEN_RC" -ne 0 ]; then
+            cat qa/open.txt
+            exit "$OPEN_RC"
+          fi
+
+          agent-browser wait --load domcontentloaded >> qa/open.txt 2>&1 || true
+          agent-browser get url > qa/url.txt 2>&1 || true
+          agent-browser get title > qa/title.txt 2>&1 || true
+          agent-browser snapshot -i > qa/snapshot-initial.txt 2>&1 || true
+          agent-browser console > qa/console-initial.txt 2>&1 || true
+          agent-browser errors > qa/errors-initial.txt 2>&1 || true
+          agent-browser network requests > qa/network-initial.txt 2>&1 || true
+
+          agent-browser set viewport 1440 1000 > /dev/null 2>&1 || true
+          agent-browser screenshot qa/desktop.png --full > qa/screenshot-desktop.txt 2>&1 || true
+
+          agent-browser find role textbox fill 'https://example.com/not-supported' --name 'Public social media URL' > qa/fill-invalid.txt 2>&1 || true
+          agent-browser find role button click --name 'Analyze link' > qa/click-invalid.txt 2>&1 || true
+          agent-browser wait 1200 > /dev/null 2>&1 || true
+          agent-browser snapshot -i > qa/snapshot-after-invalid.txt 2>&1 || true
+          agent-browser console > qa/console-after-invalid.txt 2>&1 || true
+          agent-browser errors > qa/errors-after-invalid.txt 2>&1 || true
+          agent-browser screenshot qa/after-invalid.png > qa/screenshot-invalid.txt 2>&1 || true
+
+          agent-browser set viewport 390 844 > /dev/null 2>&1 || true
+          agent-browser screenshot qa/mobile.png --full > qa/screenshot-mobile.txt 2>&1 || true
+
+          for u in \
+            'https://youtube.avocadoss.co.kr' \
+            'https://insta.avocadoss.co.kr' \
+            'https://thread.avocadoss.co.kr' \
+            'https://douyin.avocadoss.co.kr' \
+            'https://xiaohongshu.avocadoss.co.kr'; do
+              key=$(echo "$u" | sed -E 's#https://([^.]*)\..*#\1#')
+              agent-browser open "$u" > "qa/${key}-open.txt" 2>&1 || true
+              agent-browser wait --load domcontentloaded > /dev/null 2>&1 || true
+              agent-browser get url > "qa/${key}-url.txt" 2>&1 || true
+              agent-browser get title > "qa/${key}-title.txt" 2>&1 || true
+          done
+
+          agent-browser close > /dev/null 2>&1 || true
+
+          echo '=== URL ===' >> qa/summary.txt
+          cat qa/url.txt >> qa/summary.txt 2>/dev/null || true
+          echo '=== TITLE ===' >> qa/summary.txt
+          cat qa/title.txt >> qa/summary.txt 2>/dev/null || true
+          echo '=== INVALID INTERACTION SNAPSHOT ===' >> qa/summary.txt
+          tail -n 80 qa/snapshot-after-invalid.txt >> qa/summary.txt 2>/dev/null || true
+          echo '=== PAGE ERRORS ===' >> qa/summary.txt
+          cat qa/errors-after-invalid.txt >> qa/summary.txt 2>/dev/null || true
+          echo '=== CONSOLE ===' >> qa/summary.txt
+          tail -n 80 qa/console-after-invalid.txt >> qa/summary.txt 2>/dev/null || true
+          cat qa/summary.txt
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-browser-live-qa
+          path: qa/
+          retention-days: 3
