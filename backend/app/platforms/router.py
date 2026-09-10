@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import re
 from dataclasses import dataclass
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qs, urlparse, urlunparse
 
 from fastapi import HTTPException
 
@@ -58,6 +58,9 @@ _TRAILING_SHARE_PUNCTUATION = ".,;:!?，。；：！？、)]}>】》」』）”
 _ZERO_WIDTH = "\u200b\u200c\u200d\u2060\ufeff"
 _XHS_NOTE_ID_RE = re.compile(r"^[0-9a-fA-F]{24}$")
 _XHS_PROFILE_NOTE_RE = re.compile(r"^/user/profile/[^/]+/([0-9a-fA-F]{24})(?:/)?$")
+_DOUYIN_AWEME_ID_RE = re.compile(r"^\d{15,22}$")
+_DOUYIN_SHARE_VIDEO_RE = re.compile(r"^/share/video/(\d{15,22})(?:/)?$")
+_DOUYIN_NOTE_RE = re.compile(r"^/note/(\d{15,22})(?:/)?$")
 
 
 def _clean_candidate(candidate: str) -> str:
@@ -89,11 +92,28 @@ def _canonicalize(candidate: str, route: PlatformRoute) -> str:
                 note_id = profile_match.group(1).lower()
                 parsed = parsed._replace(netloc="www.xiaohongshu.com", path=f"/explore/{note_id}")
         return urlunparse(parsed)
+
+    if route.platform == "douyin":
+        # Legacy web-share pages and desktop modal URLs identify the same aweme by
+        # numeric id. Converting them to the canonical /video/ form gives yt-dlp a
+        # stable input and avoids depending on page-shell JavaScript redirects.
+        share_match = _DOUYIN_SHARE_VIDEO_RE.match(parsed.path)
+        note_match = _DOUYIN_NOTE_RE.match(parsed.path)
+        modal_id = parse_qs(parsed.query).get("modal_id", [""])[0]
+        aweme_id = ""
+        if share_match:
+            aweme_id = share_match.group(1)
+        elif note_match:
+            aweme_id = note_match.group(1)
+        elif parsed.path.rstrip("/") in {"/jingxuan", "/discover"} and _DOUYIN_AWEME_ID_RE.fullmatch(modal_id):
+            aweme_id = modal_id
+        if aweme_id:
+            return f"https://www.douyin.com/video/{aweme_id}"
     return candidate
 
 
 def extract_supported_url(value: str) -> str:
-    """Extract a supported public-media URL from a URL, share text, or XHS note ID."""
+    """Extract a supported public-media URL from a URL, share text, or stable media id."""
     if not isinstance(value, str):
         raise HTTPException(status_code=400, detail="A URL is required")
     text = html.unescape(value).strip()
@@ -116,6 +136,8 @@ def extract_supported_url(value: str) -> str:
 
     if _XHS_NOTE_ID_RE.fullmatch(text):
         return f"https://www.xiaohongshu.com/explore/{text.lower()}"
+    if _DOUYIN_AWEME_ID_RE.fullmatch(text):
+        return f"https://www.douyin.com/video/{text}"
 
     raise HTTPException(status_code=400, detail="No supported media URL was found in the pasted text")
 
