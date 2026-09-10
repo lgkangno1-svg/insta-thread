@@ -1,1 +1,0 @@
-Compatibility regression coverage includes copied share text, platform short-link wrappers, tracking parameters, Xiaohongshu/RedNote profile-note aliases, and redirect-boundary checks.
