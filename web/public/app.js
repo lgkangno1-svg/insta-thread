@@ -24,6 +24,10 @@
     xiaohongshu: 'Xiaohongshu'
   };
   const transientStatuses = new Set([429, 502, 503, 504]);
+  const trailingSharePunctuation = /[.,;:!?，。；：！？、)\]}>】》」』）”’"]+$/u;
+  const zeroWidth = /[\u200B-\u200D\u2060\uFEFF]/g;
+  const explicitUrlPattern = /https?:\/\/[^\s<>"'`]+/gi;
+  const bareUrlPattern = /(?<![\w@])(?:(?:www|m|music|v)\.)?(?:youtube\.com|instagram\.com|instagr\.am|xiaohongshu\.com|xhslink\.com|xhslink\.cn|threads\.com|threads\.net|douyin\.com|iesdouyin\.com)\/[^\s<>"'`]+/gi;
 
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -91,33 +95,63 @@
     });
   };
 
-  const detectFromUrl = raw => {
+  const platformFromCandidate = candidate => {
     try {
-      const parsed = new URL(raw);
+      const parsed = new URL(candidate);
       if (!['http:', 'https:'].includes(parsed.protocol)) return '';
       const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-      if (host === 'youtu.be' || host.endsWith('youtube.com')) return 'youtube';
-      if (host.endsWith('instagram.com')) return 'instagram';
-      if (host.endsWith('threads.com') || host.endsWith('threads.net')) return 'threads';
-      if (host.endsWith('douyin.com')) return 'douyin';
-      if (host.endsWith('xiaohongshu.com') || host.endsWith('xhslink.com') || host.endsWith('xhslink.cn')) return 'xiaohongshu';
-    } catch (_) {
-      return '';
+      if (host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com')) return 'youtube';
+      if (host === 'instagr.am' || host === 'instagram.com' || host.endsWith('.instagram.com')) return 'instagram';
+      if (host === 'threads.com' || host === 'threads.net' || host.endsWith('.threads.com') || host.endsWith('.threads.net')) return 'threads';
+      if (host === 'iesdouyin.com' || host === 'douyin.com' || host.endsWith('.douyin.com')) return 'douyin';
+      if (host === 'xhslink.com' || host === 'xhslink.cn' || host === 'xiaohongshu.com' || host.endsWith('.xiaohongshu.com')) return 'xiaohongshu';
+    } catch (_) {}
+    return '';
+  };
+
+  const cleanCandidate = candidate => candidate.trim().replace(trailingSharePunctuation, '');
+
+  const extractSupportedUrl = raw => {
+    const text = String(raw || '').replace(zeroWidth, '').trim();
+    if (!text) return '';
+
+    explicitUrlPattern.lastIndex = 0;
+    let match;
+    while ((match = explicitUrlPattern.exec(text))) {
+      const candidate = cleanCandidate(match[0]);
+      if (platformFromCandidate(candidate)) return candidate;
+    }
+
+    bareUrlPattern.lastIndex = 0;
+    while ((match = bareUrlPattern.exec(text))) {
+      const candidate = `https://${cleanCandidate(match[0])}`;
+      if (platformFromCandidate(candidate)) return candidate;
+    }
+
+    if (/^[0-9a-f]{24}$/i.test(text)) {
+      return `https://www.xiaohongshu.com/explore/${text.toLowerCase()}`;
     }
     return '';
+  };
+
+  const detectFromUrl = raw => {
+    const candidate = extractSupportedUrl(raw);
+    return candidate ? platformFromCandidate(candidate) : '';
   };
 
   const updateDetection = () => {
     const value = input.value.trim();
     if (!value) {
-      setDetection('Paste any supported public link — platform selection is automatic.');
+      setDetection('Paste a link or the full copied share message — platform selection is automatic.');
       return;
     }
     const platform = detectFromUrl(value);
     if (platform) {
-      setDetection(`${platformLabels[platform]} detected automatically`, platform);
+      const extracted = extractSupportedUrl(value);
+      const fromMessage = extracted && extracted !== value;
+      setDetection(`${platformLabels[platform]} detected${fromMessage ? ' inside copied share text' : ' automatically'}`, platform);
     } else {
-      setDetection('Supported: YouTube, Instagram, Threads, Douyin and Xiaohongshu.');
+      setDetection('Supported: YouTube, Instagram, Threads, Douyin and Xiaohongshu public share links.');
     }
   };
 
@@ -245,21 +279,24 @@
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
-    const url = input.value.trim();
-    if (!url) return;
+    const raw = input.value.trim();
+    if (!raw) return;
 
-    const detected = detectFromUrl(url);
+    const url = extractSupportedUrl(raw);
+    const detected = url ? platformFromCandidate(url) : '';
     if (!detected) {
-      setStatus('This does not look like a supported public URL.', true);
+      setStatus('No supported public-media link was found in the pasted text.', true);
       input.focus();
       return;
     }
 
+    // Show the exact URL that will be sent; copied captions/titles are discarded.
+    if (raw !== url) input.value = url;
     button.disabled = true;
     button.textContent = 'Analyzing…';
     result.classList.remove('show');
     assets.innerHTML = '';
-    setStatus('Analyzing the public link…');
+    setStatus('Analyzing the public share link…');
 
     try {
       const {data} = await requestJson('/api/v1/analyze', {
@@ -270,6 +307,7 @@
       if (!data.analysis_token) throw new Error('The server did not issue a download ticket. Analyze again.');
       if (!Array.isArray(data.assets) || !data.assets.length) throw new Error('No downloadable public media was found.');
 
+      const sourceUrl = data.source_url || url;
       const label = platformLabels[data.platform] || data.platform;
       setDetection(`${label} detected automatically`, data.platform);
       setStatus(`Ready — choose the exact ${label} file you want.`);
@@ -281,7 +319,7 @@
       }
       resultTitle.textContent = data.title || 'Public media';
       resultMeta.textContent = [data.author, label].filter(Boolean).join(' · ');
-      renderAssets(data, url);
+      renderAssets(data, sourceUrl);
       result.classList.add('show');
       result.scrollIntoView({behavior: 'smooth', block: 'nearest'});
     } catch (err) {
