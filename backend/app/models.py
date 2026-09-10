@@ -7,6 +7,15 @@ from pydantic import BaseModel, Field
 
 Platform = Literal["youtube", "instagram", "xiaohongshu", "threads", "douyin"]
 AssetKind = Literal["video", "thumbnail", "image", "archive"]
+MonetizationPlatform = Literal["download", "youtube", "instagram", "threads", "douyin", "xiaohongshu"]
+MonetizationEvent = Literal[
+    "impression",
+    "click",
+    "continue",
+    "download_started",
+    "download_ready",
+    "download_error",
+]
 
 
 class AnalyzeRequest(BaseModel):
@@ -17,6 +26,12 @@ class DownloadRequest(BaseModel):
     url: str = Field(min_length=8, max_length=4096)
     asset_id: str = Field(min_length=3, max_length=256)
     analysis_token: str = Field(min_length=20, max_length=8192)
+
+
+class MonetizationEventRequest(BaseModel):
+    event: MonetizationEvent
+    campaign_id: str = Field(default="", max_length=80)
+    platform: MonetizationPlatform = "download"
 
 
 class MediaAsset(BaseModel):
