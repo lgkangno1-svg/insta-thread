@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from ..platforms import instagram_adapter, threads_adapter, xiaohongshu_adapter, ytdlp_adapter
 from ..platforms.router import detect_platform, extract_supported_url
+from ..platforms.share_resolver import resolve_share_url
 from ..security import issue_analysis_token, sponsor_gate_enabled, sponsor_gate_seconds
 from .media_fetch import (
     download_resolved_archive,
@@ -25,26 +26,30 @@ def _max_media_mb() -> int:
     return max(50, min(value, 2000))
 
 
+def _urls(value: str) -> tuple[str, str]:
+    source_url = extract_supported_url(value)
+    return source_url, resolve_share_url(source_url)
+
+
 def analyze(url: str):
-    normalized_url = extract_supported_url(url)
-    route = detect_platform(normalized_url)
+    source_url, resolved_url = _urls(url)
+    route = detect_platform(source_url)
     if route.platform == "threads":
-        result = threads_adapter.analyze(normalized_url)
+        result = threads_adapter.analyze(resolved_url)
     elif route.platform == "instagram":
-        result = instagram_adapter.analyze(normalized_url)
+        result = instagram_adapter.analyze(resolved_url)
     elif route.platform == "xiaohongshu":
-        result = xiaohongshu_adapter.analyze(normalized_url)
+        result = xiaohongshu_adapter.analyze(resolved_url)
     else:
         include_thumbnails = route.platform == "douyin"
-        result = ytdlp_adapter.analyze(normalized_url, route.platform, include_thumbnails=include_thumbnails)
+        result = ytdlp_adapter.analyze(resolved_url, route.platform, include_thumbnails=include_thumbnails)
 
-    # Bind the ticket to the exact normalized URL returned by the common parser.
-    # The browser normalizes before submitting, while direct API clients may paste
-    # a full share message; in either case the job path reuses the same parser.
-    token = issue_analysis_token(normalized_url, [asset.id for asset in result.assets])
+    # Keep the ticket bound to the normalized URL accepted from the user. Wrapper
+    # resolution can be repeated safely when the background job starts.
+    token = issue_analysis_token(source_url, [asset.id for asset in result.assets])
     return result.model_copy(update={
         "analysis_token": token,
-        "source_url": normalized_url,
+        "source_url": source_url,
         "sponsor_gate_enabled": sponsor_gate_enabled(),
         "gate_seconds": sponsor_gate_seconds(),
     })
@@ -68,19 +73,19 @@ def validate_asset_id(url: str, asset_id: str) -> None:
 
 
 def prepare(url: str, asset_id: str, tmp_root: str | None = None) -> tuple[Path, str]:
-    normalized_url = extract_supported_url(url)
-    route = detect_platform(normalized_url)
-    validate_asset_id(normalized_url, asset_id)
+    source_url, resolved_url = _urls(url)
+    route = detect_platform(source_url)
+    validate_asset_id(source_url, asset_id)
     max_size_mb = _max_media_mb()
     if route.platform == "threads":
-        source, ext = threads_adapter.resolve_asset(normalized_url, asset_id)
+        source, ext = threads_adapter.resolve_asset(resolved_url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.threads.com/")
     if route.platform == "instagram":
-        source, ext = instagram_adapter.resolve_asset(normalized_url, asset_id)
+        source, ext = instagram_adapter.resolve_asset(resolved_url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.instagram.com/")
     if route.platform == "xiaohongshu":
         if asset_id == "images:zip":
-            items = xiaohongshu_adapter.resolve_all_images(normalized_url)
+            items = xiaohongshu_adapter.resolve_all_images(resolved_url)
             return prepare_resolved_archive(
                 items,
                 max_size_mb=max_size_mb,
@@ -88,39 +93,39 @@ def prepare(url: str, asset_id: str, tmp_root: str | None = None) -> tuple[Path,
                 referer="https://www.xiaohongshu.com/",
                 filename="xiaohongshu-images.zip",
             )
-        source, ext = xiaohongshu_adapter.resolve_asset(normalized_url, asset_id)
+        source, ext = xiaohongshu_adapter.resolve_asset(resolved_url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.xiaohongshu.com/")
     if asset_id.startswith("thumbnail:"):
-        source, ext = ytdlp_adapter.resolve_thumbnail(normalized_url, asset_id)
+        source, ext = ytdlp_adapter.resolve_thumbnail(resolved_url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.douyin.com/")
-    return ytdlp_adapter.prepare_video(normalized_url, asset_id, max_size_mb=max_size_mb, tmp_root=tmp_root)
+    return ytdlp_adapter.prepare_video(resolved_url, asset_id, max_size_mb=max_size_mb, tmp_root=tmp_root)
 
 
 def download(url: str, asset_id: str):
-    normalized_url = extract_supported_url(url)
-    route = detect_platform(normalized_url)
-    validate_asset_id(normalized_url, asset_id)
+    source_url, resolved_url = _urls(url)
+    route = detect_platform(source_url)
+    validate_asset_id(source_url, asset_id)
     max_size_mb = _max_media_mb()
     if route.platform == "threads":
-        source, ext = threads_adapter.resolve_asset(normalized_url, asset_id)
+        source, ext = threads_adapter.resolve_asset(resolved_url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.threads.com/")
     if route.platform == "instagram":
-        source, ext = instagram_adapter.resolve_asset(normalized_url, asset_id)
+        source, ext = instagram_adapter.resolve_asset(resolved_url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.instagram.com/")
     if route.platform == "xiaohongshu":
         if asset_id == "images:zip":
-            items = xiaohongshu_adapter.resolve_all_images(normalized_url)
+            items = xiaohongshu_adapter.resolve_all_images(resolved_url)
             return download_resolved_archive(
                 items,
                 max_size_mb=max_size_mb,
                 referer="https://www.xiaohongshu.com/",
                 filename="xiaohongshu-images.zip",
             )
-        source, ext = xiaohongshu_adapter.resolve_asset(normalized_url, asset_id)
+        source, ext = xiaohongshu_adapter.resolve_asset(resolved_url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.xiaohongshu.com/")
     if asset_id.startswith("thumbnail:"):
-        source, ext = ytdlp_adapter.resolve_thumbnail(normalized_url, asset_id)
+        source, ext = ytdlp_adapter.resolve_thumbnail(resolved_url, asset_id)
         return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.douyin.com/")
     if asset_id.startswith("video:"):
-        return ytdlp_adapter.download_video(normalized_url, asset_id, max_size_mb=max_size_mb)
+        return ytdlp_adapter.download_video(resolved_url, asset_id, max_size_mb=max_size_mb)
     raise HTTPException(status_code=400, detail="Unsupported asset selection")
