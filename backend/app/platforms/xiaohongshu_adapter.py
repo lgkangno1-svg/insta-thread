@@ -18,6 +18,10 @@ _NOTE_ID_RE = re.compile(r"/(?:explore|discovery/item)/([0-9a-fA-F]{24})(?:[/?#]
 _ALLOWED_PAGE_HOSTS = {
     "xiaohongshu.com",
     "www.xiaohongshu.com",
+    "m.xiaohongshu.com",
+    "rednote.com",
+    "www.rednote.com",
+    "m.rednote.com",
     "xhslink.com",
     "www.xhslink.com",
     "xhslink.cn",
@@ -63,6 +67,25 @@ def _login_redirect(url: str) -> str | None:
     except HTTPException:
         return None
     return candidate
+
+
+def _candidate_note_pages(url: str, note_id: str) -> list[str]:
+    """Return official page variants while preserving raw share query parameters."""
+    parsed = urlparse(url)
+    suffix = f"?{parsed.query}" if parsed.query else ""
+    candidates = [
+        url,
+        f"https://www.xiaohongshu.com/explore/{note_id}{suffix}",
+        f"https://www.xiaohongshu.com/discovery/item/{note_id}{suffix}",
+    ]
+    out: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        out.append(candidate)
+    return out
 
 
 def _extract_balanced_object(text: str, start: int) -> str | None:
@@ -117,13 +140,13 @@ def _normalize_js_literals(raw: str) -> str:
         for literal in literals:
             if raw.startswith(literal, idx):
                 before = raw[idx - 1] if idx else ""
-                after_idx = idx + len(literal)
-                after = raw[after_idx] if after_idx < len(raw) else ""
+                end = idx + len(literal)
+                after = raw[end] if end < len(raw) else ""
                 if (not before or not (before.isalnum() or before in "_$")) and (
                     not after or not (after.isalnum() or after in "_$")
                 ):
                     out.append("null")
-                    idx = after_idx
+                    idx = end
                     replaced = True
                     break
         if replaced:
@@ -158,7 +181,7 @@ def _extract_initial_state(html: str) -> dict[str, Any]:
 def _note_from_state(state: dict[str, Any], note_id: str) -> dict[str, Any]:
     note_store = state.get("note") or {}
     detail_map = note_store.get("noteDetailMap") or (note_store.get("data") or {}).get("noteDetailMap") or {}
-    entry = detail_map.get(note_id)
+    entry = detail_map.get(note_id) if isinstance(detail_map, dict) else None
     if not isinstance(entry, dict):
         for candidate in detail_map.values() if isinstance(detail_map, dict) else []:
             if not isinstance(candidate, dict):
@@ -211,7 +234,7 @@ def _image_ext(url: str) -> str:
     if "webp" in lower:
         return "webp"
     match = re.search(r"\.(jpe?g|png|webp|gif)(?:[?#]|$)", lower)
-    return (match.group(1).replace("jpeg", "jpg") if match else "jpg")
+    return match.group(1).replace("jpeg", "jpg") if match else "jpg"
 
 
 def _image_assets(note: dict[str, Any]) -> list[MediaAsset]:
@@ -228,17 +251,10 @@ def _image_assets(note: dict[str, Any]) -> list[MediaAsset]:
         width = image.get("width") if isinstance(image.get("width"), int) else None
         height = image.get("height") if isinstance(image.get("height"), int) else None
         dims = f" · {width}×{height}" if width and height else ""
-        assets.append(
-            MediaAsset(
-                id=f"image:{idx}",
-                kind="image",
-                label=f"Image {idx + 1}{dims}",
-                width=width,
-                height=height,
-                ext=_image_ext(source),
-                preview_url=source,
-            )
-        )
+        assets.append(MediaAsset(
+            id=f"image:{idx}", kind="image", label=f"Image {idx + 1}{dims}",
+            width=width, height=height, ext=_image_ext(source), preview_url=source,
+        ))
     return assets
 
 
@@ -320,26 +336,39 @@ def _collect_video_candidates(note: dict[str, Any]) -> list[tuple[str, int, int,
 
 def _fetch_note(url: str) -> tuple[dict[str, Any], str, str]:
     _assert_page_url(url)
+    note_id = _extract_note_id(url)
+    if not note_id:
+        raise HTTPException(status_code=422, detail="Could not determine the Xiaohongshu note ID")
+
+    last_error: Exception | None = None
     try:
         with httpx.Client(timeout=35, follow_redirects=True, headers=_headers()) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            final_url = str(response.url)
-            redirect = _login_redirect(final_url)
-            if redirect:
-                response = client.get(redirect)
-                response.raise_for_status()
-                final_url = str(response.url)
-            note_id = _extract_note_id(final_url) or _extract_note_id(url) or (_extract_note_id(redirect) if redirect else None)
-            if not note_id:
-                raise HTTPException(status_code=422, detail="Could not determine the Xiaohongshu note ID")
-            state = _extract_initial_state(response.text)
-            note = _note_from_state(state, note_id)
-            return note, note_id, final_url
-    except HTTPException:
-        raise
+            for candidate in _candidate_note_pages(url, note_id):
+                try:
+                    response = client.get(candidate)
+                    response.raise_for_status()
+                    final_url = str(response.url)
+                    redirect = _login_redirect(final_url)
+                    if redirect:
+                        response = client.get(redirect)
+                        response.raise_for_status()
+                        final_url = str(response.url)
+                    resolved_id = _extract_note_id(final_url) or _extract_note_id(redirect or "") or note_id
+                    state = _extract_initial_state(response.text)
+                    note = _note_from_state(state, resolved_id)
+                    return note, resolved_id, final_url
+                except (HTTPException, httpx.HTTPError) as exc:
+                    last_error = exc
+                    continue
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=422, detail=f"Could not load this public Xiaohongshu share page: {exc}") from exc
+        last_error = exc
+
+    detail = "Could not load the public Xiaohongshu note from its share page"
+    if isinstance(last_error, HTTPException):
+        detail = str(last_error.detail)
+    elif last_error:
+        detail = f"{detail}: {last_error}"
+    raise HTTPException(status_code=422, detail=detail)
 
 
 def analyze(url: str) -> AnalyzeResponse:
@@ -352,27 +381,16 @@ def analyze(url: str) -> AnalyzeResponse:
         width = best[1] or None
         height = best[2] or None
         dims = f" · {width}×{height}" if width and height else ""
-        assets.append(
-            MediaAsset(
-                id="video:best",
-                kind="video",
-                label=f"Best available{dims}",
-                width=width,
-                height=height,
-                ext="mp4",
-                preview_url=(images[0].preview_url if images else None),
-            )
-        )
+        assets.append(MediaAsset(
+            id="video:best", kind="video", label=f"Best available{dims}",
+            width=width, height=height, ext="mp4",
+            preview_url=images[0].preview_url if images else None,
+        ))
     if len(images) > 1:
-        assets.append(
-            MediaAsset(
-                id="images:zip",
-                kind="archive",
-                label=f"Download all {len(images)} images (.ZIP)",
-                ext="zip",
-                preview_url=images[0].preview_url,
-            )
-        )
+        assets.append(MediaAsset(
+            id="images:zip", kind="archive", label=f"Download all {len(images)} images (.ZIP)",
+            ext="zip", preview_url=images[0].preview_url,
+        ))
     assets.extend(images)
     if not assets:
         note_type = str(note.get("type") or "unknown")
@@ -383,7 +401,7 @@ def analyze(url: str) -> AnalyzeResponse:
         title=note.get("title") or note.get("desc") or f"Xiaohongshu {note_id}",
         author=user.get("nickname") or user.get("nickName") or user.get("name"),
         webpage_url=webpage_url,
-        preview_url=(images[0].preview_url if images else None),
+        preview_url=images[0].preview_url if images else None,
         assets=assets,
     )
 
@@ -393,11 +411,7 @@ def resolve_all_images(url: str) -> list[tuple[str, str]]:
     assets = _image_assets(note)
     if len(assets) < 2:
         raise HTTPException(status_code=404, detail="This Xiaohongshu note does not contain multiple public images")
-    return [
-        (asset.preview_url, asset.ext or "jpg")
-        for asset in assets
-        if asset.preview_url
-    ]
+    return [(asset.preview_url, asset.ext or "jpg") for asset in assets if asset.preview_url]
 
 
 def resolve_asset(url: str, asset_id: str) -> tuple[str, str]:
