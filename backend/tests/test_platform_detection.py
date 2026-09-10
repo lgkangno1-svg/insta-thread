@@ -30,6 +30,16 @@ def test_supported_platforms(url, expected):
     assert detect_platform(url).platform == expected
 
 
+def test_extracts_observed_xiaohongshu_pc_feed_explore_url_unchanged():
+    raw = (
+        "https://www.xiaohongshu.com/explore/67adf355000000002903897e?"
+        "xsec_token=CBN7UgqNCyw61T0_AIiBV1doeZNxFgnqmA-rFyxVZ070Q="
+        "&xsec_source=pc_feed"
+    )
+    assert extract_supported_url(raw) == raw
+    assert detect_platform(raw).platform == "xiaohongshu"
+
+
 def test_extracts_xiaohongshu_url_from_pc_share_text_and_preserves_token_padding():
     raw = (
         "54 [叠加收纳不浪费，橱柜又多出一倍空间‼️ - creator | rednote] "
