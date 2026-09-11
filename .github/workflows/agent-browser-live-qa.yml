@@ -17,6 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Install agent-browser
         shell: bash
         run: |
@@ -28,70 +32,77 @@ jobs:
       - name: Run live browser QA
         shell: bash
         run: |
-          set -u
+          set -euo pipefail
           mkdir -p qa
           TARGET='https://download.avocadoss.co.kr'
+          EXPECTED_TITLE='All-in-One Social Media Downloader | YouTube, Instagram, Threads, Douyin & Xiaohongshu'
           {
             echo "target=$TARGET"
             echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > qa/summary.txt
 
-          set +e
           agent-browser open "$TARGET" > qa/open.txt 2>&1
-          OPEN_RC=$?
-          echo "open_rc=$OPEN_RC" >> qa/summary.txt
-          if [ "$OPEN_RC" -ne 0 ]; then
-            cat qa/open.txt
-            exit "$OPEN_RC"
-          fi
-
-          agent-browser wait --load domcontentloaded >> qa/open.txt 2>&1 || true
-          agent-browser get url > qa/url.txt 2>&1 || true
-          agent-browser get title > qa/title.txt 2>&1 || true
-          agent-browser snapshot -i > qa/snapshot-initial.txt 2>&1 || true
+          agent-browser wait --load domcontentloaded >> qa/open.txt 2>&1
+          agent-browser get url > qa/url.txt
+          agent-browser get title > qa/title.txt
+          agent-browser snapshot -i > qa/snapshot-initial.txt
           agent-browser console > qa/console-initial.txt 2>&1 || true
           agent-browser errors > qa/errors-initial.txt 2>&1 || true
           agent-browser network requests > qa/network-initial.txt 2>&1 || true
 
-          agent-browser set viewport 1440 1000 > /dev/null 2>&1 || true
-          agent-browser screenshot qa/desktop.png --full > qa/screenshot-desktop.txt 2>&1 || true
+          # Fail closed on Cloudflare error pages, wrong routing, or an empty/broken shell.
+          grep -Fxq 'https://download.avocadoss.co.kr/' qa/url.txt
+          grep -Fxq "$EXPECTED_TITLE" qa/title.txt
+          ! grep -Eqi 'Cloudflare Tunnel error|Error 1033|Bad gateway|Internal Server Error' qa/title.txt qa/snapshot-initial.txt
+          grep -Fq 'textbox "Public social media URL"' qa/snapshot-initial.txt
+          grep -Fq 'button "Analyze link"' qa/snapshot-initial.txt
 
-          agent-browser find role textbox fill 'https://example.com/not-supported' --name 'Public social media URL' > qa/fill-invalid.txt 2>&1 || true
-          agent-browser find role button click --name 'Analyze link' > qa/click-invalid.txt 2>&1 || true
-          agent-browser wait 1200 > /dev/null 2>&1 || true
-          agent-browser snapshot -i > qa/snapshot-after-invalid.txt 2>&1 || true
+          agent-browser set viewport 1440 1000 > /dev/null
+          agent-browser screenshot qa/desktop.png --full > qa/screenshot-desktop.txt 2>&1
+
+          # Verify real interaction and the unsupported-URL error state.
+          agent-browser find role textbox fill 'https://example.com/not-supported' --name 'Public social media URL' > qa/fill-invalid.txt 2>&1
+          agent-browser find role button click --name 'Analyze link' > qa/click-invalid.txt 2>&1
+          agent-browser wait 500 > /dev/null
+          agent-browser get text '[data-status]' > qa/invalid-status.txt
+          grep -Fqi 'supported public URL' qa/invalid-status.txt
+          agent-browser snapshot -i > qa/snapshot-after-invalid.txt
           agent-browser console > qa/console-after-invalid.txt 2>&1 || true
           agent-browser errors > qa/errors-after-invalid.txt 2>&1 || true
-          agent-browser screenshot qa/after-invalid.png > qa/screenshot-invalid.txt 2>&1 || true
+          agent-browser screenshot qa/after-invalid.png > qa/screenshot-invalid.txt 2>&1
 
-          agent-browser set viewport 390 844 > /dev/null 2>&1 || true
-          agent-browser screenshot qa/mobile.png --full > qa/screenshot-mobile.txt 2>&1 || true
+          agent-browser set viewport 390 844 > /dev/null
+          agent-browser screenshot qa/mobile.png --full > qa/screenshot-mobile.txt 2>&1
 
-          for u in \
-            'https://youtube.avocadoss.co.kr' \
-            'https://insta.avocadoss.co.kr' \
-            'https://thread.avocadoss.co.kr' \
-            'https://douyin.avocadoss.co.kr' \
-            'https://xiaohongshu.avocadoss.co.kr'; do
-              key=$(echo "$u" | sed -E 's#https://([^.]*)\..*#\1#')
-              agent-browser open "$u" > "qa/${key}-open.txt" 2>&1 || true
-              agent-browser wait --load domcontentloaded > /dev/null 2>&1 || true
-              agent-browser get url > "qa/${key}-url.txt" 2>&1 || true
-              agent-browser get title > "qa/${key}-title.txt" 2>&1 || true
-          done
+          # Every public alias must resolve to its canonical platform page, never a CF error page.
+          check_alias() {
+            local key="$1" alias="$2" path="$3" title_fragment="$4"
+            agent-browser open "$alias" > "qa/${key}-open.txt" 2>&1
+            agent-browser wait --load domcontentloaded > /dev/null 2>&1
+            agent-browser get url > "qa/${key}-url.txt"
+            agent-browser get title > "qa/${key}-title.txt"
+            grep -Fxq "https://download.avocadoss.co.kr${path}" "qa/${key}-url.txt"
+            grep -Fqi "$title_fragment" "qa/${key}-title.txt"
+            ! grep -Eqi 'Cloudflare Tunnel error|Error 1033|Bad gateway' "qa/${key}-title.txt"
+          }
+          check_alias youtube 'https://youtube.avocadoss.co.kr' '/youtube-downloader' 'YouTube Video Downloader'
+          check_alias insta 'https://insta.avocadoss.co.kr' '/instagram-reels-downloader' 'Instagram Reels'
+          check_alias thread 'https://thread.avocadoss.co.kr' '/threads-downloader' 'Threads Video & Image Downloader'
+          check_alias douyin 'https://douyin.avocadoss.co.kr' '/douyin-downloader' 'Douyin Video & Cover Downloader'
+          check_alias xiaohongshu 'https://xiaohongshu.avocadoss.co.kr' '/xiaohongshu-downloader' 'Xiaohongshu Video & Image Downloader'
 
           agent-browser close > /dev/null 2>&1 || true
 
           echo '=== URL ===' >> qa/summary.txt
-          cat qa/url.txt >> qa/summary.txt 2>/dev/null || true
+          cat qa/url.txt >> qa/summary.txt
           echo '=== TITLE ===' >> qa/summary.txt
-          cat qa/title.txt >> qa/summary.txt 2>/dev/null || true
-          echo '=== INVALID INTERACTION SNAPSHOT ===' >> qa/summary.txt
-          tail -n 80 qa/snapshot-after-invalid.txt >> qa/summary.txt 2>/dev/null || true
+          cat qa/title.txt >> qa/summary.txt
+          echo '=== INVALID STATUS ===' >> qa/summary.txt
+          cat qa/invalid-status.txt >> qa/summary.txt
           echo '=== PAGE ERRORS ===' >> qa/summary.txt
           cat qa/errors-after-invalid.txt >> qa/summary.txt 2>/dev/null || true
           echo '=== CONSOLE ===' >> qa/summary.txt
-          tail -n 80 qa/console-after-invalid.txt >> qa/summary.txt 2>/dev/null || true
+          tail -n 40 qa/console-after-invalid.txt >> qa/summary.txt 2>/dev/null || true
           cat qa/summary.txt
 
       - name: Upload QA evidence
