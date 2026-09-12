@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html as html_lib
+import re
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -36,6 +38,24 @@ _RESOLVE_PATH_PREFIXES = {
     "threads": ("/share/", "/t/"),
 }
 
+_MEDIA_PATHS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "instagram": (
+        re.compile(r"^/(?:reel|p|tv)/[^/?#]+/?$", re.I),
+    ),
+    "threads": (
+        re.compile(r"^/@[^/]+/post/[\w-]+/?$", re.I),
+        re.compile(r"^/t/[\w-]+/?$", re.I),
+    ),
+    "xiaohongshu": (
+        re.compile(r"^/(?:explore|discovery/item)/[0-9a-f]{24}/?$", re.I),
+        re.compile(r"^/user/profile/[^/]+/[0-9a-f]{24}/?$", re.I),
+    ),
+    "douyin": (
+        re.compile(r"^/(?:video|note)/\d{15,22}/?$", re.I),
+        re.compile(r"^/share/video/\d{15,22}/?$", re.I),
+    ),
+}
+
 
 def needs_resolution(url: str, platform: str) -> bool:
     parsed = urlparse(url)
@@ -43,6 +63,49 @@ def needs_resolution(url: str, platform: str) -> bool:
     if host in _RESOLVE_HOSTS:
         return True
     return any(parsed.path.startswith(prefix) for prefix in _RESOLVE_PATH_PREFIXES.get(platform, ()))
+
+
+def _is_media_path(url: str, platform: str) -> bool:
+    path = urlparse(url).path
+    return any(pattern.fullmatch(path) for pattern in _MEDIA_PATHS.get(platform, ()))
+
+
+def _attribute(tag: str, name: str) -> str | None:
+    match = re.search(rf"\b{re.escape(name)}\s*=\s*([\"'])(.*?)\1", tag, re.I | re.S)
+    return html_lib.unescape(match.group(2).strip()) if match else None
+
+
+def _document_media_target(page: str, platform: str) -> str | None:
+    """Read a canonical public-media URL from a 200 share-wrapper document.
+
+    Instagram and Threads increasingly serve share-sheet wrappers as HTTP 200 pages
+    whose canonical link points at the real post, rather than issuing a 30x redirect.
+    Only same-platform media paths are accepted; profile/login/home canonicals are
+    deliberately ignored.
+    """
+    for tag in re.findall(r"<link\b[^>]*>", page, re.I | re.S):
+        rel = (_attribute(tag, "rel") or "").lower().split()
+        href = _attribute(tag, "href")
+        if "canonical" in rel and href and _is_media_path(href, platform):
+            return href
+
+    for tag in re.findall(r"<meta\b[^>]*>", page, re.I | re.S):
+        prop = (_attribute(tag, "property") or _attribute(tag, "name") or "").lower()
+        content = _attribute(tag, "content")
+        if prop == "og:url" and content and _is_media_path(content, platform):
+            return content
+    return None
+
+
+def _validate_target(target: str, platform: str, allowed: set[str]) -> str:
+    parsed = urlparse(target)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password or host not in allowed:
+        raise HTTPException(status_code=422, detail="Share link redirected outside the supported platform")
+    routed = detect_platform(target)
+    if routed.platform != platform:
+        raise HTTPException(status_code=422, detail="Share link redirected to a different platform")
+    return target
 
 
 def resolve_share_url(value: str) -> str:
@@ -65,18 +128,28 @@ def resolve_share_url(value: str) -> str:
                 response = client.get(current)
                 if response.status_code not in {301, 302, 303, 307, 308}:
                     response.raise_for_status()
-                    # Run the final URL through the common canonicalizer. This converts
-                    # RedNote/profile-note targets to the Xiaohongshu note form while
-                    # preserving xsec_token and other query parameters.
-                    return extract_supported_url(current)
+                    document_target = _document_media_target(response.text, route.platform)
+                    if document_target:
+                        target = urljoin(current, document_target)
+                        _validate_target(target, route.platform, allowed)
+                        return extract_supported_url(target)
+
+                    # Direct media paths need no further document-level resolution.
+                    if _is_media_path(current, route.platform):
+                        return extract_supported_url(current)
+
+                    # A short/share wrapper that lands on a profile, login page or home
+                    # page is not the requested post. Do not pass that unrelated page to
+                    # an extractor because it can produce misleading media or errors.
+                    raise HTTPException(
+                        status_code=422,
+                        detail="This share link no longer resolves to a public media post. Copy the link again from the original post.",
+                    )
                 location = response.headers.get("location")
                 if not location:
                     raise HTTPException(status_code=422, detail="Share link redirect did not provide a destination")
                 target = urljoin(current, location)
-                parsed = urlparse(target)
-                host = (parsed.hostname or "").lower().rstrip(".")
-                if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password or host not in allowed:
-                    raise HTTPException(status_code=422, detail="Share link redirected outside the supported platform")
+                _validate_target(target, route.platform, allowed)
                 current = target
     except HTTPException:
         raise
