@@ -1,0 +1,45 @@
+name: Instagram Share HTML Shape
+
+on:
+  push:
+    branches: [ops/agent-browser-live-qa-20260911]
+    paths: ['.github/workflows/instagram-share-html-shape.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Inspect public wrapper mapping markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re, urllib.request
+          url='https://www.instagram.com/share/reel/BATba9dkhm'
+          req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36','Accept-Language':'en-US,en;q=0.9'})
+          text=urllib.request.urlopen(req,timeout=30).read().decode('utf-8','replace')
+          target='DH5vjQeAgnq'
+          print('target_hits',text.count(target))
+          # Report only structural key names surrounding the known public shortcode.
+          for m in list(re.finditer(re.escape(target),text))[:8]:
+              snippet=text[max(0,m.start()-180):m.end()+180]
+              snippet=re.sub(r'https?://[^"\\\s<]+','[URL]',snippet)
+              snippet=re.sub(r'(?i)(token|csrf|session|cookie)(["\']?\s*[:=]\s*["\'])[^"\']+',r'\1\2[REDACTED]',snippet)
+              print('CTX',snippet.replace('\n',' ')[:420])
+          patterns={
+            'reel_path': r'/reel/([A-Za-z0-9_-]{6,20})',
+            'shortcode_json': r'["\']shortcode["\']\s*:\s*["\']([A-Za-z0-9_-]{6,20})',
+            'code_json': r'["\']code["\']\s*:\s*["\']([A-Za-z0-9_-]{6,20})',
+            'permalink': r'["\']permalink["\']\s*:\s*["\']([^"\']+)',
+          }
+          for name,pat in patterns.items():
+              vals=[]
+              for x in re.findall(pat,text,re.I):
+                  if x not in vals: vals.append(x)
+              print(name, vals[:12])
+          PY
