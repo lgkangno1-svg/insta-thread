@@ -97,6 +97,29 @@ def _validate_target(target: str, platform: str, allowed: set[str]) -> str:
     return target
 
 
+def _request_headers(platform: str) -> dict[str, str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.8,zh-CN;q=0.7",
+    }
+    # Instagram's current /share/... wrappers return a generic HTTP 200 shell to
+    # non-navigation clients. Sending the standard top-level navigation signals makes
+    # the same public wrapper return its official 302 to the canonical Reel/Post URL.
+    if platform == "instagram":
+        headers.update({
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-User": "?1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-CH-UA": '"Chromium";v="153", "Not=A?Brand";v="24"',
+            "Sec-CH-UA-Mobile": "?0",
+            "Sec-CH-UA-Platform": '"Linux"',
+        })
+    return headers
+
+
 def resolve_share_url(value: str) -> str:
     """Resolve official short/share wrappers while rejecting cross-platform redirects."""
     start = extract_supported_url(value)
@@ -105,17 +128,12 @@ def resolve_share_url(value: str) -> str:
         return start
 
     allowed = _ALLOWED_REDIRECT_HOSTS[route.platform]
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.8,zh-CN;q=0.7",
-    }
     current = start
     try:
         with httpx.Client(
             timeout=20,
             follow_redirects=False,
-            headers=headers,
+            headers=_request_headers(route.platform),
             cookies=httpx_guest_cookies(),
         ) as client:
             for _ in range(7):
