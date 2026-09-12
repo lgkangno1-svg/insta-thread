@@ -1,0 +1,39 @@
+name: Share Browser Resolution
+
+on:
+  push:
+    branches: [ops/agent-browser-live-qa-20260911]
+    paths: ['.github/workflows/share-browser-resolution.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Install agent-browser
+        shell: bash
+        run: |
+          npm install -g agent-browser@latest
+          agent-browser install --with-deps >/dev/null
+      - name: Resolve official share URLs in real browser
+        shell: bash
+        run: |
+          set -u
+          for pair in \
+            'instagram|https://www.instagram.com/share/reel/BATba9dkhm' \
+            'xhs1|http://xhslink.com/m/6H6cN8mpO3a' \
+            'xhs2|http://xhslink.com/m/76yG1t3zh5k'; do
+            name=${pair%%|*}; url=${pair#*|}
+            echo "=== $name ==="
+            agent-browser open "$url" >/dev/null 2>&1 || true
+            agent-browser wait 7000 >/dev/null 2>&1 || true
+            echo -n 'final_url='; agent-browser get url 2>/dev/null || true
+            echo -n 'canonical='; agent-browser eval "document.querySelector('link[rel=canonical]')?.href || ''" 2>/dev/null || true
+            echo -n 'og_url='; agent-browser eval "document.querySelector('meta[property=\"og:url\"]')?.content || ''" 2>/dev/null || true
+            echo -n 'body_media_paths='; agent-browser eval "Array.from(new Set((document.documentElement.innerHTML.match(/\\/(?:reel|p|tv|explore|discovery\\/item)\\/[A-Za-z0-9_-]{8,}/g)||[]))).slice(0,10).join(',')" 2>/dev/null || true
+          done
+          agent-browser close >/dev/null 2>&1 || true
