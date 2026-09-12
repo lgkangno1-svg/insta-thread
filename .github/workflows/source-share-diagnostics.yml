@@ -19,8 +19,8 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, re, urllib.request, urllib.error
-          from urllib.parse import urljoin
+          import re, urllib.request, urllib.error
+          from urllib.parse import urljoin, urlparse
 
           UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36'
           targets=[
@@ -28,40 +28,43 @@ jobs:
             ('instagram-share','https://www.instagram.com/share/reel/BATba9dkhm',UA),
             ('douyin','https://www.douyin.com/video/7647942099643452724',UA),
             ('douyin-short','https://v.douyin.com/iLSyqNLd/',UA),
-            ('xhs-short','http://xhslink.com/m/1gJ5tOG6M1b',UA),
+            ('xhs-old','http://xhslink.com/m/1gJ5tOG6M1b',UA),
+            ('xhs-note','http://xhslink.com/m/6H6cN8mpO3a',UA),
+            ('xhs-note2','http://xhslink.com/m/76yG1t3zh5k',UA),
           ]
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl): return None
+
           for name,url,ua in targets:
             print(f'=== {name} ===')
             current=url
-            for hop in range(6):
+            for hop in range(7):
               req=urllib.request.Request(current,headers={'User-Agent':ua,'Accept-Language':'en-US,en;q=0.8,zh-CN;q=0.7'})
-              opener=urllib.request.build_opener(urllib.request.HTTPHandler, urllib.request.HTTPSHandler)
               try:
-                # prevent auto redirects by using a custom handler
-                class NoRedirect(urllib.request.HTTPRedirectHandler):
-                  def redirect_request(self, req, fp, code, msg, headers, newurl): return None
-                opener=urllib.request.build_opener(NoRedirect)
-                res=opener.open(req,timeout=30)
+                res=urllib.request.build_opener(NoRedirect).open(req,timeout=30)
                 code=res.status; headers=res.headers; body=res.read(4_000_000)
               except urllib.error.HTTPError as e:
                 code=e.code; headers=e.headers; body=e.read(4_000_000)
-              print('hop',hop,'code',code,'host',urllib.request.urlparse(current).hostname if False else current.split('/')[2])
+              p=urlparse(current)
+              print('hop',hop,'code',code,'host',p.hostname,'path',p.path)
               if code in (301,302,303,307,308) and headers.get('Location'):
-                loc=urljoin(current,headers['Location'])
-                print('redirect_host',loc.split('/')[2], 'path', '/'+'/'.join(loc.split('/')[3:]).split('?')[0])
-                current=loc
+                current=urljoin(current,headers['Location'])
+                t=urlparse(current)
+                print('redirect_host',t.hostname,'path',t.path,'query_keys',','.join(sorted({x.split('=',1)[0] for x in t.query.split('&') if x})))
                 continue
               text=body.decode('utf-8','replace')
-              print('bytes',len(body),'final_path','/'+'/'.join(current.split('/')[3:]).split('?')[0])
+              print('bytes',len(body))
               for marker in ['video_versions','image_versions2','carousel_media','__INITIAL_STATE__','s_v_web_id','web_session','og:url','canonical']:
                 print(marker, text.count(marker))
+              canon=re.search(r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)',text,re.I)
+              if not canon:
+                canon=re.search(r'<link[^>]+href=["\']([^"\']+)["\'][^>]+rel=["\']canonical["\']',text,re.I)
+              if canon:
+                c=urlparse(canon.group(1).replace('&amp;','&'))
+                print('canonical_host',c.hostname,'canonical_path',c.path,'canonical_query_keys',','.join(sorted({x.split('=',1)[0] for x in c.query.split('&') if x})))
               if name=='threads':
                 scripts=re.findall(r'<script[^>]+type=["\']application/json["\'][^>]*>(.*?)</script>',text,re.S|re.I)
                 print('json_scripts',len(scripts),'json_script_bytes',sum(len(x) for x in scripts))
                 print('shortcode_hits',text.count('DdEg-eSktZ2'))
-                print('video_url_hits',len(re.findall(r'https?:\\/\\/[^"\']+\.mp4',text,re.I)))
-              if name=='instagram-share':
-                m=re.search(r'<meta[^>]+property=["\']og:url["\'][^>]+content=["\']([^"\']+)',text,re.I)
-                print('og_url_path',('/'+'/'.join(m.group(1).split('/')[3:]).split('?')[0]) if m else 'none')
               break
           PY
