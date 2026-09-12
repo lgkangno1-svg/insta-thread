@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from fastapi import HTTPException
 
+from .cookie_support import httpx_guest_cookies
 from .router import detect_platform, extract_supported_url
 
 
@@ -25,9 +26,6 @@ _ALLOWED_REDIRECT_HOSTS: dict[str, set[str]] = {
     },
 }
 
-# yt-dlp natively handles youtu.be well; resolving it in advance can hit a regional
-# consent redirect, so leave it untouched. Resolve wrappers where the platform adapter
-# needs the canonical post URL or where a short link carries required share context.
 _RESOLVE_HOSTS = {
     "instagr.am", "www.instagr.am",
     "xhslink.com", "www.xhslink.com", "xhslink.cn", "www.xhslink.cn",
@@ -39,9 +37,7 @@ _RESOLVE_PATH_PREFIXES = {
 }
 
 _MEDIA_PATHS: dict[str, tuple[re.Pattern[str], ...]] = {
-    "instagram": (
-        re.compile(r"^/(?:reel|p|tv)/[^/?#]+/?$", re.I),
-    ),
+    "instagram": (re.compile(r"^/(?:reel|p|tv)/[^/?#]+/?$", re.I),),
     "threads": (
         re.compile(r"^/@[^/]+/post/[\w-]+/?$", re.I),
         re.compile(r"^/t/[\w-]+/?$", re.I),
@@ -76,13 +72,6 @@ def _attribute(tag: str, name: str) -> str | None:
 
 
 def _document_media_target(page: str, platform: str) -> str | None:
-    """Read a canonical public-media URL from a 200 share-wrapper document.
-
-    Instagram and Threads increasingly serve share-sheet wrappers as HTTP 200 pages
-    whose canonical link points at the real post, rather than issuing a 30x redirect.
-    Only same-platform media paths are accepted; profile/login/home canonicals are
-    deliberately ignored.
-    """
     for tag in re.findall(r"<link\b[^>]*>", page, re.I | re.S):
         rel = (_attribute(tag, "rel") or "").lower().split()
         href = _attribute(tag, "href")
@@ -123,7 +112,12 @@ def resolve_share_url(value: str) -> str:
     }
     current = start
     try:
-        with httpx.Client(timeout=20, follow_redirects=False, headers=headers) as client:
+        with httpx.Client(
+            timeout=20,
+            follow_redirects=False,
+            headers=headers,
+            cookies=httpx_guest_cookies(),
+        ) as client:
             for _ in range(7):
                 response = client.get(current)
                 if response.status_code not in {301, 302, 303, 307, 308}:
@@ -134,13 +128,9 @@ def resolve_share_url(value: str) -> str:
                         _validate_target(target, route.platform, allowed)
                         return extract_supported_url(target)
 
-                    # Direct media paths need no further document-level resolution.
                     if _is_media_path(current, route.platform):
                         return extract_supported_url(current)
 
-                    # A short/share wrapper that lands on a profile, login page or home
-                    # page is not the requested post. Do not pass that unrelated page to
-                    # an extractor because it can produce misleading media or errors.
                     raise HTTPException(
                         status_code=422,
                         detail="This share link no longer resolves to a public media post. Copy the link again from the original post.",
