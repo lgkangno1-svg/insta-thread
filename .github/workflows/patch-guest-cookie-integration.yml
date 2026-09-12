@@ -1,0 +1,73 @@
+name: Patch Guest Cookie Integration
+
+on:
+  push:
+    branches: [ops/agent-browser-live-qa-20260911]
+    paths: ['.github/workflows/patch-guest-cookie-integration.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch adapters and run focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          xhs = Path('backend/app/platforms/xiaohongshu_adapter.py')
+          text = xhs.read_text()
+          old = 'from ..models import AnalyzeResponse, MediaAsset\n'
+          new = old + 'from .cookie_support import httpx_guest_cookies\n'
+          if 'from .cookie_support import httpx_guest_cookies' not in text:
+              if old not in text: raise SystemExit('xhs import anchor missing')
+              text = text.replace(old, new, 1)
+          old_client = 'with httpx.Client(timeout=35, follow_redirects=True, headers=_headers()) as client:'
+          new_client = 'with httpx.Client(timeout=35, follow_redirects=True, headers=_headers(), cookies=httpx_guest_cookies()) as client:'
+          if new_client not in text:
+              if old_client not in text: raise SystemExit('xhs client anchor missing')
+              text = text.replace(old_client, new_client, 1)
+          xhs.write_text(text)
+
+          ytdlp = Path('backend/app/platforms/ytdlp_adapter.py')
+          text = ytdlp.read_text()
+          old = 'from ..models import AnalyzeResponse, MediaAsset\n'
+          new = old + 'from .cookie_support import cookie_file_path\n'
+          if 'from .cookie_support import cookie_file_path' not in text:
+              if old not in text: raise SystemExit('ytdlp import anchor missing')
+              text = text.replace(old, new, 1)
+          old_block = '''    cookie_file = os.getenv("YTDLP_COOKIE_FILE")\n    if cookie_file and Path(cookie_file).is_file():\n        opts["cookiefile"] = cookie_file\n'''
+          new_block = '''    cookie_file = cookie_file_path()\n    if cookie_file is not None:\n        opts["cookiefile"] = str(cookie_file)\n'''
+          if new_block not in text:
+              if old_block not in text: raise SystemExit('ytdlp cookie anchor missing')
+              text = text.replace(old_block, new_block, 1)
+          ytdlp.write_text(text)
+          PY
+          python -m pip install -q -r backend/requirements.txt pytest
+          cd backend
+          pytest -q tests/test_share_resolver.py tests/test_platform_detection.py tests/test_xiaohongshu_parser.py
+          cd ..
+          git diff --check
+      - name: Commit to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'no_changes=yes'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/platforms/xiaohongshu_adapter.py backend/app/platforms/ytdlp_adapter.py
+          git commit -m 'fix: share guest session cookies with Douyin and Xiaohongshu'
+          git push origin HEAD:main
