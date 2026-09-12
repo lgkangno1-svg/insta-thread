@@ -137,11 +137,14 @@ jobs:
           agent-browser set viewport 390 844 >/dev/null
           agent-browser screenshot qa/mobile.png --full > qa/screenshot-mobile.txt 2>&1
 
+          # Platform pages load the shared stylesheet directly. The initial real-
+          # browser network assertion above verifies that styles.css then loads the
+          # Stitch design layer. Do not require Docker-only direct HTML injection.
           check_platform_markup() {
             local key="$1" path="$2" platform="$3"
             curl -fsS --max-time 10 "${TARGET}${path}?qa=$(date +%s%N)" > "qa/${key}-html.txt"
             grep -Fq "<body data-platform=\"${platform}\">" "qa/${key}-html.txt"
-            grep -Fq '/stitch.css' "qa/${key}-html.txt"
+            grep -Fq '/styles.css' "qa/${key}-html.txt"
           }
           check_platform_markup youtube '/youtube-downloader' youtube
           check_platform_markup insta '/instagram-reels-downloader' instagram
