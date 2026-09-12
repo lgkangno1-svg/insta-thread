@@ -1,0 +1,34 @@
+name: Instagram Share Network Shape
+
+on:
+  push:
+    branches: [ops/agent-browser-live-qa-20260911]
+    paths: ['.github/workflows/instagram-share-network-shape.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Install agent-browser
+        run: |
+          npm install -g agent-browser@latest
+          agent-browser install --with-deps >/dev/null
+      - name: Inspect network request families
+        shell: bash
+        run: |
+          set -u
+          agent-browser open 'https://www.instagram.com/share/reel/BATba9dkhm' >/dev/null 2>&1 || true
+          agent-browser wait 9000 >/dev/null 2>&1 || true
+          echo '=== final ==='
+          agent-browser get url || true
+          echo '=== network ==='
+          agent-browser network requests 2>/dev/null \
+            | sed -E 's#([?&](access_token|token|csrf|session|jazoest|lsd|fb_dtsg)=[^& ]+)#\1[REDACTED]#Ig' \
+            | grep -Ei 'instagram|graphql|share|reel|api' \
+            | tail -n 120 || true
+          agent-browser close >/dev/null 2>&1 || true
