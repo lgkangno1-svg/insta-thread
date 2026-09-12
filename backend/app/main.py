@@ -97,7 +97,7 @@ def _apply_security_headers(request: Request, response: Response) -> Response:
     if host.endswith(".avocadoss.co.kr"):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
-    if path.startswith("/api/") or path == "/health":
+    if path.startswith("/api/") or path in {"/health", "/build.txt"}:
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     elif path.endswith((".css", ".js", ".svg", ".webmanifest")):
@@ -105,6 +105,37 @@ def _apply_security_headers(request: Request, response: Response) -> Response:
     else:
         response.headers.setdefault("Cache-Control", "public, max-age=0, must-revalidate")
     return response
+
+
+def _runtime_build_sha() -> str:
+    configured = os.getenv("BUILD_SHA", "").strip()
+    if configured:
+        return configured
+
+    repo_root = Path(__file__).resolve().parents[2]
+    git_dir = repo_root / ".git"
+    try:
+        head = (git_dir / "HEAD").read_text(encoding="utf-8").strip()
+        if head.startswith("ref: "):
+            ref = head[5:].strip()
+            ref_file = git_dir / ref
+            if ref_file.is_file():
+                value = ref_file.read_text(encoding="utf-8").strip()
+                if value:
+                    return value
+            packed_refs = git_dir / "packed-refs"
+            if packed_refs.is_file():
+                for line in packed_refs.read_text(encoding="utf-8").splitlines():
+                    if not line or line.startswith(("#", "^")):
+                        continue
+                    sha, _, packed_ref = line.partition(" ")
+                    if packed_ref == ref and sha:
+                        return sha
+        elif head:
+            return head
+    except OSError:
+        pass
+    return "unknown"
 
 
 @app.middleware("http")
@@ -147,6 +178,15 @@ async def production_guards(request: Request, call_next):
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
+
+
+@app.get("/build.txt", include_in_schema=False)
+def build_marker() -> Response:
+    return Response(
+        f"{_runtime_build_sha()}\n",
+        media_type="text/plain",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/v1/monetization/config")
