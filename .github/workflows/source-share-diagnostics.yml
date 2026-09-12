@@ -1,0 +1,67 @@
+name: Source Share Diagnostics
+
+on:
+  push:
+    branches: [ops/agent-browser-live-qa-20260911]
+    paths: ['.github/workflows/source-share-diagnostics.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Inspect source response shapes without printing private data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, re, urllib.request, urllib.error
+          from urllib.parse import urljoin
+
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36'
+          targets=[
+            ('threads','https://www.threads.com/@dillydally111/post/DdEg-eSktZ2','Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'),
+            ('instagram-share','https://www.instagram.com/share/reel/BATba9dkhm',UA),
+            ('douyin','https://www.douyin.com/video/7647942099643452724',UA),
+            ('douyin-short','https://v.douyin.com/iLSyqNLd/',UA),
+            ('xhs-short','http://xhslink.com/m/1gJ5tOG6M1b',UA),
+          ]
+          for name,url,ua in targets:
+            print(f'=== {name} ===')
+            current=url
+            for hop in range(6):
+              req=urllib.request.Request(current,headers={'User-Agent':ua,'Accept-Language':'en-US,en;q=0.8,zh-CN;q=0.7'})
+              opener=urllib.request.build_opener(urllib.request.HTTPHandler, urllib.request.HTTPSHandler)
+              try:
+                # prevent auto redirects by using a custom handler
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                  def redirect_request(self, req, fp, code, msg, headers, newurl): return None
+                opener=urllib.request.build_opener(NoRedirect)
+                res=opener.open(req,timeout=30)
+                code=res.status; headers=res.headers; body=res.read(4_000_000)
+              except urllib.error.HTTPError as e:
+                code=e.code; headers=e.headers; body=e.read(4_000_000)
+              print('hop',hop,'code',code,'host',urllib.request.urlparse(current).hostname if False else current.split('/')[2])
+              if code in (301,302,303,307,308) and headers.get('Location'):
+                loc=urljoin(current,headers['Location'])
+                print('redirect_host',loc.split('/')[2], 'path', '/'+'/'.join(loc.split('/')[3:]).split('?')[0])
+                current=loc
+                continue
+              text=body.decode('utf-8','replace')
+              print('bytes',len(body),'final_path','/'+'/'.join(current.split('/')[3:]).split('?')[0])
+              for marker in ['video_versions','image_versions2','carousel_media','__INITIAL_STATE__','s_v_web_id','web_session','og:url','canonical']:
+                print(marker, text.count(marker))
+              if name=='threads':
+                scripts=re.findall(r'<script[^>]+type=["\']application/json["\'][^>]*>(.*?)</script>',text,re.S|re.I)
+                print('json_scripts',len(scripts),'json_script_bytes',sum(len(x) for x in scripts))
+                print('shortcode_hits',text.count('DdEg-eSktZ2'))
+                print('video_url_hits',len(re.findall(r'https?:\\/\\/[^"\']+\.mp4',text,re.I)))
+              if name=='instagram-share':
+                m=re.search(r'<meta[^>]+property=["\']og:url["\'][^>]+content=["\']([^"\']+)',text,re.I)
+                print('og_url_path',('/'+'/'.join(m.group(1).split('/')[3:]).split('?')[0]) if m else 'none')
+              break
+          PY
