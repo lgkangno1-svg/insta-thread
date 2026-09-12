@@ -46,6 +46,8 @@ jobs:
           test -f web/public/index.html
           test -f web/public/robots.txt
           test -f web/public/sitemap.xml
+          test -f web/public/stitch.css
+          grep -q 'stitch.css?v=20260912a' web/Dockerfile
           grep -q 'https://download.avocadoss.co.kr/' web/public/index.html
           for page in youtube-downloader instagram-reels-downloader threads-downloader douyin-downloader xiaohongshu-downloader; do
             test -f "web/public/${page}.html"
