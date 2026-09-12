@@ -1,0 +1,45 @@
+name: Instagram Share Header Probe
+
+on:
+  push:
+    branches: [ops/agent-browser-live-qa-20260911]
+    paths: ['.github/workflows/instagram-share-header-probe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Probe redirect behavior
+        shell: bash
+        run: |
+          python - <<'PY'
+          import urllib.request, urllib.error
+          from urllib.parse import urljoin, urlparse
+          url='https://www.instagram.com/share/reel/BATba9dkhm'
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl): return None
+          opener=urllib.request.build_opener(NoRedirect)
+          variants={
+            'basic': {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36'},
+            'navigate': {
+              'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36',
+              'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+              'Accept-Language':'en-US,en;q=0.9',
+              'Upgrade-Insecure-Requests':'1',
+              'Sec-Fetch-Site':'none','Sec-Fetch-Mode':'navigate','Sec-Fetch-User':'?1','Sec-Fetch-Dest':'document',
+              'Sec-CH-UA':'"Chromium";v="153", "Not=A?Brand";v="24"','Sec-CH-UA-Mobile':'?0','Sec-CH-UA-Platform':'"Linux"',
+            },
+          }
+          for name,headers in variants.items():
+              try:
+                  r=opener.open(urllib.request.Request(url,headers=headers),timeout=30)
+                  code=r.status; loc=r.headers.get('Location'); body=r.read(1000)
+              except urllib.error.HTTPError as e:
+                  code=e.code; loc=e.headers.get('Location'); body=e.read(1000)
+              print(name,'code',code,'location_host',urlparse(urljoin(url,loc)).hostname if loc else 'none','location_path',urlparse(urljoin(url,loc)).path if loc else 'none','body_prefix_bytes',len(body))
+          PY
