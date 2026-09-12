@@ -9,6 +9,7 @@ import httpx
 from fastapi import HTTPException
 
 from ..models import AnalyzeResponse, MediaAsset
+from .cookie_support import httpx_guest_cookies
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -342,7 +343,7 @@ def _fetch_note(url: str) -> tuple[dict[str, Any], str, str]:
 
     last_error: Exception | None = None
     try:
-        with httpx.Client(timeout=35, follow_redirects=True, headers=_headers()) as client:
+        with httpx.Client(timeout=35, follow_redirects=True, headers=_headers(), cookies=httpx_guest_cookies()) as client:
             for candidate in _candidate_note_pages(url, note_id):
                 try:
                     response = client.get(candidate)

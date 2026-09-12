@@ -13,6 +13,7 @@ from starlette.background import BackgroundTask
 from starlette.responses import FileResponse
 
 from ..models import AnalyzeResponse, MediaAsset
+from .cookie_support import cookie_file_path
 
 try:
     import yt_dlp
@@ -49,9 +50,9 @@ def _base_opts() -> dict[str, Any]:
         opts["extractor_args"] = {
             "youtubepot-bgutilhttp": {"base_url": [pot_url]},
         }
-    cookie_file = os.getenv("YTDLP_COOKIE_FILE")
-    if cookie_file and Path(cookie_file).is_file():
-        opts["cookiefile"] = cookie_file
+    cookie_file = cookie_file_path()
+    if cookie_file is not None:
+        opts["cookiefile"] = str(cookie_file)
     return opts
 
 
