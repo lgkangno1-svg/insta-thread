@@ -1,6 +1,9 @@
 services:
   web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        BUILD_SHA: ${BUILD_SHA:-dev}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${WEB_BIND_PORT:-8080}:80"
