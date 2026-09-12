@@ -19,8 +19,61 @@ jobs:
   production-qa:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 22
     steps:
+      - name: Wait for promoted SHA to reach the miniPC
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p qa
+          TARGET='https://download.avocadoss.co.kr'
+
+          if [[ -n "${EVENT_EXPECTED_SHA:-}" ]]; then
+            EXPECTED_SHA="$EVENT_EXPECTED_SHA"
+          else
+            EXPECTED_SHA="$(
+              curl -fsSL \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/ref/heads/production" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])'
+            )"
+          fi
+
+          printf '%s\n' "$EXPECTED_SHA" > qa/expected-sha.txt
+          LAST_SHA='unavailable'
+          for attempt in $(seq 1 52); do
+            if LIVE_SHA="$(curl -fsS --max-time 10 "${TARGET}/build.txt?qa=${attempt}-$(date +%s)" 2>/dev/null | tr -d '\r\n')"; then
+              LAST_SHA="${LIVE_SHA:-empty}"
+              if [[ "$LIVE_SHA" == "$EXPECTED_SHA" ]]; then
+                printf '%s\n' "$LIVE_SHA" > qa/live-sha.txt
+                {
+                  echo "target=$TARGET"
+                  echo "expected_sha=$EXPECTED_SHA"
+                  echo "live_sha=$LIVE_SHA"
+                  echo "deploy_observed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                } > qa/summary.txt
+                echo "Production is serving promoted SHA $LIVE_SHA"
+                exit 0
+              fi
+            fi
+            echo "Waiting for production SHA $EXPECTED_SHA (currently $LAST_SHA, attempt $attempt/52)"
+            sleep 15
+          done
+
+          {
+            echo "target=$TARGET"
+            echo "expected_sha=$EXPECTED_SHA"
+            echo "last_live_sha=$LAST_SHA"
+            echo "deployment_wait_failed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > qa/summary.txt
+          echo "Production did not reach promoted SHA $EXPECTED_SHA; last observed $LAST_SHA" >&2
+          exit 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -40,10 +93,13 @@ jobs:
           mkdir -p qa
           TARGET='https://download.avocadoss.co.kr'
           EXPECTED_TITLE='All-in-One Social Media Downloader | YouTube, Instagram, Threads, Douyin & Xiaohongshu'
+          EXPECTED_SHA="$(cat qa/expected-sha.txt)"
+          LIVE_SHA="$(cat qa/live-sha.txt)"
           {
-            echo "target=$TARGET"
             echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          } > qa/summary.txt
+            echo "browser_expected_sha=$EXPECTED_SHA"
+            echo "browser_live_sha=$LIVE_SHA"
+          } >> qa/summary.txt
 
           agent-browser open "$TARGET" > qa/open.txt 2>&1
           agent-browser wait --load domcontentloaded >> qa/open.txt 2>&1
@@ -54,12 +110,15 @@ jobs:
           agent-browser errors > qa/errors-initial.txt 2>&1 || true
           agent-browser network requests > qa/network-initial.txt 2>&1 || true
 
-          # Fail closed: a Cloudflare error page must never count as a passing HTTP/browser check.
+          # Fail closed: stale deployment, Cloudflare error pages, or a missing
+          # design layer must never count as a passing browser check.
+          [[ "$LIVE_SHA" == "$EXPECTED_SHA" ]]
           grep -Fxq 'https://download.avocadoss.co.kr/' qa/url.txt
           grep -Fxq "$EXPECTED_TITLE" qa/title.txt
           ! grep -Eqi 'Cloudflare Tunnel error|Error 1033|Bad gateway|Internal Server Error' qa/title.txt qa/snapshot-initial.txt
           grep -Fq 'textbox "Public social media URL"' qa/snapshot-initial.txt
           grep -Fq 'button "Analyze link"' qa/snapshot-initial.txt
+          grep -Fq '/stitch.css' qa/network-initial.txt
 
           agent-browser set viewport 1440 1000 >/dev/null
           agent-browser screenshot qa/desktop.png --full > qa/screenshot-desktop.txt 2>&1
@@ -69,7 +128,7 @@ jobs:
           agent-browser find role button click --name 'Analyze link' > qa/click-invalid.txt 2>&1
           agent-browser wait 500 >/dev/null
           agent-browser get text '[data-status]' > qa/invalid-status.txt
-          grep -Fqi 'supported public URL' qa/invalid-status.txt
+          grep -Eqi 'supported public(-media)?' qa/invalid-status.txt
           agent-browser snapshot -i > qa/snapshot-after-invalid.txt
           agent-browser console > qa/console-after-invalid.txt 2>&1 || true
           agent-browser errors > qa/errors-after-invalid.txt 2>&1 || true
@@ -77,6 +136,18 @@ jobs:
 
           agent-browser set viewport 390 844 >/dev/null
           agent-browser screenshot qa/mobile.png --full > qa/screenshot-mobile.txt 2>&1
+
+          check_platform_markup() {
+            local key="$1" path="$2" platform="$3"
+            curl -fsS --max-time 10 "${TARGET}${path}?qa=$(date +%s%N)" > "qa/${key}-html.txt"
+            grep -Fq "<body data-platform=\"${platform}\">" "qa/${key}-html.txt"
+            grep -Fq '/stitch.css' "qa/${key}-html.txt"
+          }
+          check_platform_markup youtube '/youtube-downloader' youtube
+          check_platform_markup insta '/instagram-reels-downloader' instagram
+          check_platform_markup thread '/threads-downloader' threads
+          check_platform_markup douyin '/douyin-downloader' douyin
+          check_platform_markup xiaohongshu '/xiaohongshu-downloader' xiaohongshu
 
           check_alias() {
             local key="$1" alias="$2" path="$3" title_fragment="$4"
