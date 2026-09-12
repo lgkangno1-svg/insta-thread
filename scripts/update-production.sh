@@ -84,12 +84,14 @@ rollback() {
   trap - ERR
   echo "Rolling back source and containers to $previous" >&2
   git checkout --detach "$previous" || true
-  docker compose build web api || true
+  BUILD_SHA="$previous" docker compose build web api || true
   docker compose up -d web api bgutil-provider || true
 }
 trap rollback ERR
 
-docker compose build --pull web api
+# Embed the exact CI-promoted commit into the web image so public browser QA can
+# wait for the miniPC deployment instead of racing the update timer.
+BUILD_SHA="$target" docker compose build --pull web api
 docker compose up -d web api bgutil-provider
 ensure_local_health
 refresh_systemd_units_if_root
