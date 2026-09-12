@@ -53,6 +53,17 @@ jobs:
             test -f "web/public/${page}.html"
             grep -q "https://download.avocadoss.co.kr/${page}" "web/public/${page}.html"
           done
+      - name: Validate production deployment observability
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'ARG BUILD_SHA=dev' web/Dockerfile
+          grep -Fq 'build.txt' web/Dockerfile
+          grep -Fq 'BUILD_SHA: ${BUILD_SHA:-dev}' docker-compose.yml
+          grep -Fq 'BUILD_SHA="$target"' scripts/update-production.sh
+          grep -Fq 'BUILD_SHA="$previous"' scripts/update-production.sh
+          grep -Fq 'location = /build.txt' web/nginx.conf
+          grep -Fq 'expected_sha=' .github/workflows/live-browser-qa.yml
       - name: Validate browser JavaScript and shell automation syntax
         shell: bash
         run: |
