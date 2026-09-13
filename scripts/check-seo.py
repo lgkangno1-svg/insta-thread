@@ -18,6 +18,18 @@ INDEXABLE = {
     "xiaohongshu-downloader.html": f"{CANONICAL}/xiaohongshu-downloader",
     "faq.html": f"{CANONICAL}/faq",
 }
+HTML_REDIRECTS = {
+    "/index.html": "/",
+    "/youtube-downloader.html": "/youtube-downloader",
+    "/instagram-reels-downloader.html": "/instagram-reels-downloader",
+    "/threads-downloader.html": "/threads-downloader",
+    "/douyin-downloader.html": "/douyin-downloader",
+    "/xiaohongshu-downloader.html": "/xiaohongshu-downloader",
+    "/faq.html": "/faq",
+    "/terms.html": "/terms",
+    "/privacy.html": "/privacy",
+    "/copyright.html": "/copyright",
+}
 
 
 def one(pattern: str, text: str, label: str, filename: str) -> str:
@@ -41,9 +53,6 @@ def main() -> int:
             raise AssertionError(f"{filename}: canonical {href!r} != {canonical!r}")
         if "index" not in robots or "follow" not in robots:
             raise AssertionError(f"{filename}: robots must allow index/follow")
-        # Search engines do not publish fixed character limits for title links or
-        # descriptions. Keep broad sanity bounds only so CI catches missing or
-        # obviously bloated metadata without encoding SERP truncation folklore.
         if not (15 <= len(title) <= 100):
             raise AssertionError(f"{filename}: title length {len(title)} is outside 15..100")
         if not (50 <= len(desc) <= 260):
@@ -72,7 +81,13 @@ def main() -> int:
     if "Disallow: /api/" not in robots:
         raise AssertionError("robots.txt must keep API routes out of crawl space")
 
-    print(f"SEO checks passed for {len(INDEXABLE)} indexable pages")
+    nginx = (ROOT / "web" / "nginx.conf").read_text(encoding="utf-8")
+    for source, target in HTML_REDIRECTS.items():
+        expected = f"location = {source} {{ return 301 {CANONICAL}{target}; }}"
+        if expected not in nginx:
+            raise AssertionError(f"nginx missing canonical redirect: {source} -> {target}")
+
+    print(f"SEO checks passed for {len(INDEXABLE)} indexable pages and {len(HTML_REDIRECTS)} HTML redirects")
     return 0
 
 
