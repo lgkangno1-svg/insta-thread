@@ -11,8 +11,6 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import HTTPException
-from starlette.background import BackgroundTask
-from starlette.responses import FileResponse
 
 _ALLOWED_SCHEMES = {"http", "https"}
 
@@ -162,38 +160,3 @@ def prepare_resolved_archive(
         raise HTTPException(status_code=422, detail=f"Could not build media archive: {exc}") from exc
 
     return path, tmpdir
-
-
-def download_resolved_media(
-    source_url: str,
-    ext: str,
-    max_size_mb: int = 500,
-    referer: str | None = None,
-) -> FileResponse:
-    path, tmpdir = prepare_resolved_media(source_url, ext, max_size_mb=max_size_mb, referer=referer)
-    return FileResponse(
-        path,
-        filename=path.name,
-        media_type="application/octet-stream",
-        background=BackgroundTask(cleanup_dir, tmpdir),
-    )
-
-
-def download_resolved_archive(
-    items: list[tuple[str, str]],
-    max_size_mb: int = 500,
-    referer: str | None = None,
-    filename: str = "download-images.zip",
-) -> FileResponse:
-    path, tmpdir = prepare_resolved_archive(
-        items,
-        max_size_mb=max_size_mb,
-        referer=referer,
-        filename=filename,
-    )
-    return FileResponse(
-        path,
-        filename=path.name,
-        media_type="application/zip",
-        background=BackgroundTask(cleanup_dir, tmpdir),
-    )
