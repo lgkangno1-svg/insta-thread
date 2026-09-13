@@ -47,7 +47,6 @@ services:
       MONETIZATION_SPONSOR_CTA: ${MONETIZATION_SPONSOR_CTA:-Visit sponsor}
       MONETIZATION_DISCLOSURE: ${MONETIZATION_DISCLOSURE:-Some links may be affiliate links. A purchase may generate a commission at no extra cost to you.}
       MONETIZATION_METRICS_FILE: ${MONETIZATION_METRICS_FILE:-/data/metrics/monetization.json}
-      ENABLE_DIRECT_DOWNLOAD: ${ENABLE_DIRECT_DOWNLOAD:-false}
     depends_on:
       - bgutil-provider
     volumes:
