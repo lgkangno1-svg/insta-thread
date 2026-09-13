@@ -10,12 +10,7 @@ from ..platforms import instagram_adapter, threads_adapter, xiaohongshu_adapter,
 from ..platforms.router import detect_platform, extract_supported_url
 from ..platforms.share_resolver import resolve_share_url
 from ..security import issue_analysis_token, sponsor_gate_enabled, sponsor_gate_seconds
-from .media_fetch import (
-    download_resolved_archive,
-    download_resolved_media,
-    prepare_resolved_archive,
-    prepare_resolved_media,
-)
+from .media_fetch import prepare_resolved_archive, prepare_resolved_media
 
 
 def _max_media_mb() -> int:
@@ -99,33 +94,3 @@ def prepare(url: str, asset_id: str, tmp_root: str | None = None) -> tuple[Path,
         source, ext = ytdlp_adapter.resolve_thumbnail(resolved_url, asset_id)
         return prepare_resolved_media(source, ext, max_size_mb=max_size_mb, tmp_root=tmp_root, referer="https://www.douyin.com/")
     return ytdlp_adapter.prepare_video(resolved_url, asset_id, max_size_mb=max_size_mb, tmp_root=tmp_root)
-
-
-def download(url: str, asset_id: str):
-    source_url, resolved_url = _urls(url)
-    route = detect_platform(source_url)
-    validate_asset_id(source_url, asset_id)
-    max_size_mb = _max_media_mb()
-    if route.platform == "threads":
-        source, ext = threads_adapter.resolve_asset(resolved_url, asset_id)
-        return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.threads.com/")
-    if route.platform == "instagram":
-        source, ext = instagram_adapter.resolve_asset(resolved_url, asset_id)
-        return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.instagram.com/")
-    if route.platform == "xiaohongshu":
-        if asset_id == "images:zip":
-            items = xiaohongshu_adapter.resolve_all_images(resolved_url)
-            return download_resolved_archive(
-                items,
-                max_size_mb=max_size_mb,
-                referer="https://www.xiaohongshu.com/",
-                filename="xiaohongshu-images.zip",
-            )
-        source, ext = xiaohongshu_adapter.resolve_asset(resolved_url, asset_id)
-        return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.xiaohongshu.com/")
-    if asset_id.startswith("thumbnail:"):
-        source, ext = ytdlp_adapter.resolve_thumbnail(resolved_url, asset_id)
-        return download_resolved_media(source, ext, max_size_mb=max_size_mb, referer="https://www.douyin.com/")
-    if asset_id.startswith("video:"):
-        return ytdlp_adapter.download_video(resolved_url, asset_id, max_size_mb=max_size_mb)
-    raise HTTPException(status_code=400, detail="Unsupported asset selection")
