@@ -32,13 +32,15 @@ jobs:
       - name: Compile Python sources and provisioning script
         run: |
           python -m compileall -q backend/app
-          python -m py_compile scripts/provision-cloudflare.py
+          python -m py_compile scripts/provision-cloudflare.py scripts/check-seo.py
 
   static-web-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Validate technical SEO
+        run: python scripts/check-seo.py
       - name: Validate required SEO files and canonical hostname
         shell: bash
         run: |
