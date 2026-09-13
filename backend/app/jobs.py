@@ -22,7 +22,6 @@ class Job:
     url: str
     asset_id: str
     status: str = "queued"
-    created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     path: Path | None = None
     tmpdir: str | None = None

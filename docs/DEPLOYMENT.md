@@ -1,6 +1,6 @@
-# Production deployment: miniPC + Cloudflare Tunnel
+# Production deployment: rootless miniPC + Cloudflare Tunnel
 
-Production is designed around one dedicated miniPC stack and one dedicated remotely managed Cloudflare Tunnel. Do **not** reuse or restart unrelated tunnels from other AVOCADOSS services.
+The live service uses one isolated rootless runtime on the miniPC and one dedicated Cloudflare Tunnel. Do **not** restart or reconfigure unrelated AVOCADOSS tunnels.
 
 ## Production flow
 
@@ -9,16 +9,20 @@ main push
   -> GitHub Actions CI
      -> backend tests
      -> frontend/SEO/static checks
-     -> Docker production build
-  -> Promote production workflow
+     -> Docker reference build
+  -> Promote production
      -> production branch points at the tested SHA only
-  -> miniPC systemd timer
-     -> fetch production
-     -> build + deploy
-     -> local health check
-     -> rollback on failure
-  -> dedicated avocadoss-download Cloudflare Tunnel
+  -> self-hosted miniPC watchdog (lgkangno1-svg/korea-concierge-ci)
+     -> fetch production into services/insta-thread/repo
+     -> reset services/insta-thread/app to the same production SHA
+     -> keep isolated config/cookies/runtime data outside the app clone
+     -> restart/recover the app only when necessary
+     -> verify local health + public health + design assets
+  -> dedicated Cloudflare Tunnel
+  -> Live Browser QA waits for exact /build.txt SHA and tests the public site
 ```
+
+The Docker Compose/systemd files in this repository are retained as a reproducible reference deployment and CI build target. They are **not the current live miniPC runtime**.
 
 ## Hostnames
 
@@ -26,132 +30,95 @@ Canonical:
 
 - `download.avocadoss.co.kr`
 
-Aliases, all served by the same Tunnel and redirected by Nginx to canonical platform paths:
+Aliases redirect to canonical platform pages:
 
-- `youtube.avocadoss.co.kr`
-- `insta.avocadoss.co.kr`
-- `thread.avocadoss.co.kr`
-- `douyin.avocadoss.co.kr`
-- `xiaohongshu.avocadoss.co.kr`
+- `youtube.avocadoss.co.kr` -> `/youtube-downloader`
+- `insta.avocadoss.co.kr` -> `/instagram-reels-downloader`
+- `thread.avocadoss.co.kr` -> `/threads-downloader`
+- `douyin.avocadoss.co.kr` -> `/douyin-downloader`
+- `xiaohongshu.avocadoss.co.kr` -> `/xiaohongshu-downloader`
 
-The Tunnel ingress target is `http://web:80` because cloudflared runs inside this project's Docker Compose network.
+FastAPI performs the alias redirects in rootless mode. Nginx performs equivalent redirects in the Docker reference deployment.
 
-## 1. miniPC prerequisites
+## miniPC runtime layout
 
-Required:
+The self-hosted runner service home contains an isolated downloader directory:
 
-- Linux + systemd
-- Git
-- rsync
-- curl
-- Docker Engine
-- Docker Compose plugin (`docker compose`)
-- outbound Internet access
-
-No public inbound port is required. Nginx is bound only to `127.0.0.1:8080` on the host.
-
-## 2. Install the tested production checkout
-
-Use any temporary checkout of the repository to invoke the installer:
-
-```bash
-git clone https://github.com/lgkangno1-svg/insta-thread.git ~/insta-thread-bootstrap
-cd ~/insta-thread-bootstrap
-sudo bash scripts/install-minipc-systemd.sh
+```text
+$HOME/services/insta-thread/
+  repo/      # production source mirror used by the watchdog
+  app/       # actual rootless runtime clone; kept at the same production SHA
+  config/    # owner-controlled runtime config/cookie material; never committed
+  ...        # PID/log/runtime files managed by the watchdog scripts
 ```
 
-The installer:
+`repo` and `app` must always converge to the same promoted `production` SHA. A Git pull into `repo` alone is **not** a completed deployment.
 
-1. clones/resets `/opt/insta-thread` to the CI-promoted `production` branch;
-2. preserves `/opt/insta-thread/.env` and `data/`;
-3. generates `DOWNLOAD_TOKEN_SECRET` once if it is blank;
-4. installs only the `insta-thread-*` systemd units;
-5. starts the local Docker stack;
-6. requires `http://127.0.0.1:8080/health` to pass;
-7. enables the production update timer.
+The live application serves API + static web from FastAPI with `SERVE_WEB=true`. The current rootless origin is loopback-only; Cloudflare Tunnel is the intended public ingress.
 
-The public Tunnel remains disabled until a real Tunnel token is configured.
+## Deployment observability
 
-## 3. Provision Cloudflare automatically with the API
+`GET /build.txt` is the deployment contract.
 
-The repository includes `scripts/provision-cloudflare.py`. It is intentionally conservative: it only creates/reuses a Tunnel named `avocadoss-download`, refuses unrelated ingress rules by default, and refuses to overwrite non-CNAME DNS records unless an explicit force variable is set.
+- Docker/Nginx mode returns the updater's deployed SHA marker.
+- Rootless FastAPI mode returns `BUILD_SHA` when configured, otherwise the runtime Git HEAD.
+- Responses are `no-store` and `noindex`.
 
-Create a scoped Cloudflare API token with:
+Live Browser QA waits until `/build.txt` exactly matches the promoted production SHA before testing the UI. A healthy page on the wrong SHA must not count as a successful deployment.
 
-- Account -> Cloudflare Tunnel -> Edit
-- Zone (`avocadoss.co.kr`) -> DNS -> Edit
-- Zone (`avocadoss.co.kr`) -> Zone -> Read, for automatic zone/account discovery
+## Watchdog responsibilities
 
-Then on the miniPC:
+The miniPC watchdog must:
 
-```bash
-cd /opt/insta-thread
-read -rsp 'Cloudflare API token: ' CLOUDFLARE_API_TOKEN; echo
-export CLOUDFLARE_API_TOKEN
-sudo --preserve-env=CLOUDFLARE_API_TOKEN python3 scripts/provision-cloudflare.py
-unset CLOUDFLARE_API_TOKEN
+1. fetch the `production` branch;
+2. reset both `repo` and the actual `app` clone to the same production SHA;
+3. preserve external config, cookies, logs and temporary runtime state;
+4. ensure the rootless app process is alive;
+5. ensure the dedicated Cloudflare Tunnel process is alive;
+6. verify local `/health`;
+7. verify public HTTP 200 responses and required design assets;
+8. fail instead of silently claiming success when any required check fails.
+
+The watchdog is intentionally separate from this application's GitHub-hosted CI because it executes on the miniPC self-hosted runner.
+
+## Public verification
+
+Minimum release checks:
+
+```text
+/health        -> HTTP 200
+/build.txt     -> exact promoted production SHA
+/              -> canonical homepage
+/styles.css    -> HTTP 200
+/stitch.css    -> HTTP 200
 ```
 
-The provisioner will:
+Live Browser QA additionally verifies:
 
-1. discover the active `avocadoss.co.kr` zone and account;
-2. create or reuse only the `avocadoss-download` Tunnel;
-3. set all six ingress hostnames to `http://web:80` plus a final `http_status:404` catch-all;
-4. create/update proxied CNAME records to `<TUNNEL_UUID>.cfargotunnel.com`;
-5. retrieve the remotely managed Tunnel token;
-6. write the Tunnel token into `/opt/insta-thread/.env` without printing it.
+- desktop and mobile rendering;
+- canonical homepage title and primary input/button;
+- unsupported-URL error handling;
+- all five platform pages;
+- all five alias redirects;
+- Stitch stylesheet network loading;
+- browser console/page errors;
+- screenshot/evidence artifact upload.
 
-## 4. Start only this project's Tunnel
+Periodic real-link E2E verification should separately exercise `Analyze -> background job -> temporary file delivery` for currently available public samples. Real platform URLs are not hard-coded as permanent correctness fixtures because providers can remove, expire, region-gate or change them independently of this service.
 
-```bash
-sudo systemctl enable --now insta-thread-tunnel.service
-```
+## Runtime secrets and config
 
-Do not use commands such as `pkill cloudflared`, `systemctl restart cloudflared*`, or bulk Docker cleanup. Other AVOCADOSS services may have unrelated Tunnel connectors.
+Never commit:
 
-## 5. Verify local and public health
+- `DOWNLOAD_TOKEN_SECRET`;
+- Cloudflare Tunnel/API credentials;
+- cookies or browser/session data;
+- payout/affiliate credentials.
 
-Local first:
-
-```bash
-curl -fsS --max-time 5 http://127.0.0.1:8080/health
-```
-
-Then public samples:
-
-```bash
-cd /opt/insta-thread
-sudo PUBLIC_SAMPLES=12 bash scripts/smoke.sh
-```
-
-Treat sampled Cloudflare `1033`, `530`, and origin `502` responses as a deployment failure. Diagnose local origin health before touching the Tunnel.
-
-## 6. Automatic tested updates
-
-`insta-thread-update.timer` checks every ~10 minutes. It fetches **only** the `production` branch, which is moved only after GitHub CI succeeds.
-
-Manual update/check:
-
-```bash
-sudo systemctl start insta-thread-update.service
-sudo journalctl -u insta-thread-update.service -n 100 --no-pager
-```
-
-The updater:
-
-- serializes deployments with `flock`;
-- builds before switching traffic;
-- checks local health for up to 60 seconds;
-- rolls source + containers back to the previous SHA on failure;
-- does not restart a healthy Tunnel for ordinary app deploys;
-- refreshes only `insta-thread-*` systemd unit files.
-
-## 7. Production `.env`
-
-Important defaults:
+Important application defaults:
 
 ```dotenv
-DOWNLOAD_TOKEN_SECRET=<generated-once-by-installer>
+DOWNLOAD_TOKEN_SECRET=<long-random-secret>
 ANALYSIS_TOKEN_TTL_SECONDS=900
 SPONSOR_GATE_ENABLED=false
 SPONSOR_GATE_SECONDS=4
@@ -161,16 +128,24 @@ MIN_FREE_GB=5
 JOB_TTL_SECONDS=1800
 READY_JOB_TTL_SECONDS=600
 ERROR_JOB_TTL_SECONDS=120
-ENABLE_DIRECT_DOWNLOAD=false
 ```
 
-`DOWNLOAD_TOKEN_SECRET`, the Cloudflare API token, Tunnel token, cookies, and session data must never be committed.
+The public download flow has one supported execution path: signed analysis ticket -> background job -> temporary file response. There is no separate synchronous debug download endpoint.
 
-## 8. Public-download architecture notes
+## Docker reference deployment
 
-- Long yt-dlp/FFmpeg work runs in background jobs; Cloudflare does not wait for the full extraction request.
-- Prepared files expire quickly and are removed after delivery.
-- New jobs stop when disk free space falls below the configured reserve.
-- Download jobs require a signed analysis ticket bound to the exact URL and asset choice.
-- The synchronous debug download endpoint is disabled by default.
-- Cloudflare is the only intended public ingress; the origin HTTP port stays loopback-only.
+For local/recovery testing on a host with Docker:
+
+```bash
+cp .env.example .env
+mkdir -p data/tmp data/metrics
+docker compose build
+docker compose up -d web api bgutil-provider
+curl -fsS http://127.0.0.1:8080/health
+```
+
+Enable the Compose Cloudflare Tunnel profile only with a dedicated valid token. Do not use broad process-kill or Docker cleanup commands on a multi-service miniPC.
+
+## Rollback rule
+
+Rollback is SHA-based. If a promoted revision fails local/public health, restore the last known-good promoted SHA and restart only this service. Do not modify unrelated Cloudflare connectors or AVOCADOSS services while diagnosing this downloader.

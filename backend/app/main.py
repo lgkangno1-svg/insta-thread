@@ -17,8 +17,6 @@ from starlette.staticfiles import StaticFiles
 from .jobs import store
 from .models import AnalyzeRequest, AnalyzeResponse, DownloadRequest, HealthResponse, MonetizationEventRequest
 from .monetization import campaign_config, record_event
-from .platforms.router import extract_supported_url
-from .security import verify_analysis_token
 from .services import downloader
 
 app = FastAPI(
@@ -236,18 +234,6 @@ def get_job_file(job_id: str):
         media_type="application/octet-stream",
         background=BackgroundTask(store.consume, job.id),
     )
-
-
-# Disabled in production by default. The public browser flow must use background jobs
-# so Cloudflare never waits on a long extractor/FFmpeg request.
-@app.post("/api/v1/download")
-def download_media(payload: DownloadRequest):
-    enabled = os.getenv("ENABLE_DIRECT_DOWNLOAD", "false").strip().lower() in {"1", "true", "yes", "on"}
-    if not enabled:
-        raise HTTPException(status_code=404, detail="Direct download endpoint is disabled")
-    normalized_url = extract_supported_url(payload.url)
-    verify_analysis_token(payload.analysis_token, normalized_url, payload.asset_id)
-    return downloader.download(normalized_url, payload.asset_id)
 
 
 def _register_rootless_web() -> None:
