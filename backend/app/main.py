@@ -39,6 +39,18 @@ _ALLOWED_HOSTS = [
     "127.0.0.1",
     "testserver",
 ]
+_CLEAN_HTML_PATHS = {
+    "/index.html": "/",
+    "/youtube-downloader.html": "/youtube-downloader",
+    "/instagram-reels-downloader.html": "/instagram-reels-downloader",
+    "/threads-downloader.html": "/threads-downloader",
+    "/douyin-downloader.html": "/douyin-downloader",
+    "/xiaohongshu-downloader.html": "/xiaohongshu-downloader",
+    "/faq.html": "/faq",
+    "/terms.html": "/terms",
+    "/privacy.html": "/privacy",
+    "/copyright.html": "/copyright",
+}
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_ALLOWED_HOSTS)
 app.add_middleware(GZipMiddleware, minimum_size=1200, compresslevel=5)
 
@@ -148,6 +160,11 @@ async def production_guards(request: Request, call_next):
     }
     if host in aliases:
         return _apply_security_headers(request, RedirectResponse(aliases[host], status_code=301))
+
+    clean_path = _CLEAN_HTML_PATHS.get(request.url.path)
+    if clean_path is not None:
+        target = f"https://download.avocadoss.co.kr{clean_path}"
+        return _apply_security_headers(request, RedirectResponse(target, status_code=301))
 
     if os.getenv("APP_RATE_LIMIT", "true").strip().lower() in {"1", "true", "yes", "on"}:
         classified = _rate_class(request)
