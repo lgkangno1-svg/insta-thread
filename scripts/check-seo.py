@@ -41,8 +41,11 @@ def main() -> int:
             raise AssertionError(f"{filename}: canonical {href!r} != {canonical!r}")
         if "index" not in robots or "follow" not in robots:
             raise AssertionError(f"{filename}: robots must allow index/follow")
-        if not (15 <= len(title) <= 75):
-            raise AssertionError(f"{filename}: title length {len(title)} is outside 15..75")
+        # Google does not publish a fixed character limit for title links; keep only
+        # a broad guardrail so CI catches empty/obviously bloated titles without
+        # pretending a SERP truncation heuristic is a ranking rule.
+        if not (15 <= len(title) <= 100):
+            raise AssertionError(f"{filename}: title length {len(title)} is outside 15..100")
         if not (50 <= len(desc) <= 180):
             raise AssertionError(f"{filename}: description length {len(desc)} is outside 50..180")
         if len(re.sub(r"<[^>]+>", "", h1).strip()) < 8:
