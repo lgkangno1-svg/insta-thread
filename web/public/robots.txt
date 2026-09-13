@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /health
+Disallow: /build.txt
 
 Sitemap: https://download.avocadoss.co.kr/sitemap.xml
