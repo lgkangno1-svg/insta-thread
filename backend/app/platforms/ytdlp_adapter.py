@@ -4,13 +4,10 @@ import os
 import re
 import shutil
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
-from starlette.background import BackgroundTask
-from starlette.responses import FileResponse
 
 from ..models import AnalyzeResponse, MediaAsset
 from .cookie_support import cookie_file_path
@@ -19,13 +16,6 @@ try:
     import yt_dlp
 except ImportError:  # pragma: no cover - startup/dev environment aid
     yt_dlp = None
-
-
-@dataclass(frozen=True)
-class VideoChoice:
-    height: int | None
-    label: str
-    selector: str
 
 
 VIDEO_HEIGHTS = (2160, 1440, 1080, 720, 480, 360)
@@ -167,7 +157,6 @@ def _cleanup(path: str) -> None:
     shutil.rmtree(path, ignore_errors=True)
 
 
-
 def prepare_video(url: str, asset_id: str, max_size_mb: int = 1000, tmp_root: str | None = None) -> tuple[Path, str]:
     _ensure_ytdlp()
     tmpdir = tempfile.mkdtemp(prefix="insta-thread-", dir=tmp_root or None)
@@ -199,16 +188,6 @@ def prepare_video(url: str, asset_id: str, max_size_mb: int = 1000, tmp_root: st
     except Exception as exc:
         _cleanup(tmpdir)
         raise HTTPException(status_code=422, detail=f"Download failed: {exc}") from exc
-
-
-def download_video(url: str, asset_id: str, max_size_mb: int = 1000) -> FileResponse:
-    path, tmpdir = prepare_video(url, asset_id, max_size_mb=max_size_mb)
-    return FileResponse(
-        path,
-        filename=path.name,
-        media_type="application/octet-stream",
-        background=BackgroundTask(_cleanup, tmpdir),
-    )
 
 
 def resolve_thumbnail(url: str, asset_id: str) -> tuple[str, str]:
