@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Replaces the ambiguous text-only download option list with thumbnail preview cards.
+- Shows media type, format, resolution and orientation for each downloadable item.
+- Adds a download button directly on every media card.
+- Adds Pillow-based JPEG/WEBP thumbnail rendering inside the Windows app.
+- Fixes Instagram public photo posts that previously failed with “No downloadable video was found”.
+- Adds support for Instagram photo carousels and mixed image/video carousels.
+
 ## 1.1.0
 
 - Adds AVOCADOSS application icon and Windows file/product version metadata.
