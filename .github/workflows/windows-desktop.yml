@@ -30,6 +30,9 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
+      - name: Install desktop build dependencies
+        run: python -m pip install --upgrade -r desktop/requirements-build.txt
+
       - name: Run desktop unit tests
         shell: pwsh
         run: |
@@ -39,9 +42,6 @@ jobs:
 
       - name: Generate Windows icon and version resources
         run: python desktop/make_windows_resources.py
-
-      - name: Install PyInstaller
-        run: python -m pip install --upgrade "pyinstaller>=6.10,<7"
 
       - name: Build single-file GUI executable
         shell: pwsh
@@ -111,4 +111,4 @@ jobs:
             release/AVOCADOSS-Downloader.exe.sha256 \
             --target "$GITHUB_SHA" \
             --title "AVOCADOSS Downloader v${version}" \
-            --notes "Ad-free Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Includes SHA-256 verified in-app update support."
+            --notes "Ad-free Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Includes thumbnail preview cards and SHA-256 verified in-app update support."

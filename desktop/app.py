@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import io
 import os
 import queue
 import sys
 import threading
 import tkinter as tk
+import urllib.request
 import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+
+from PIL import Image, ImageTk
 
 from core import (
     API_BASE,
@@ -23,13 +27,19 @@ from core import (
     schedule_windows_self_update,
 )
 
+_PREVIEW_MAX_BYTES = 6 * 1024 * 1024
+_PREVIEW_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+)
+
 
 class DownloaderApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(f"AVOCADOSS Downloader v{APP_VERSION}")
-        self.geometry("800x680")
-        self.minsize(700, 570)
+        self.geometry("920x780")
+        self.minsize(780, 640)
         self.client = ApiClient(API_BASE)
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.analysis: dict | None = None
@@ -37,6 +47,9 @@ class DownloaderApp(tk.Tk):
         self.busy = False
         self.update_busy = False
         self.last_file: Path | None = None
+        self.download_buttons: list[ttk.Button] = []
+        self.preview_labels: list[tk.Label] = []
+        self.preview_images: dict[int, ImageTk.PhotoImage] = {}
 
         self.url_var = tk.StringVar()
         self.folder_var = tk.StringVar(value=str(Path.home() / "Downloads"))
@@ -99,39 +112,35 @@ class DownloaderApp(tk.Tk):
         folder_row.pack(fill="x", pady=(6, 14))
         ttk.Entry(folder_row, textvariable=self.folder_var).pack(side="left", fill="x", expand=True)
         ttk.Button(folder_row, text="폴더 선택", command=self._choose_folder).pack(side="left", padx=(8, 0))
+        ttk.Button(folder_row, text="폴더 열기", command=self._open_download_folder).pack(side="left", padx=(6, 0))
 
         self.analyze_button = ttk.Button(outer, text="링크 분석", command=self.analyze)
         self.analyze_button.pack(fill="x", ipady=6)
 
         self.progress = ttk.Progressbar(outer, mode="indeterminate")
         self.progress.pack(fill="x", pady=(12, 8))
-        ttk.Label(outer, textvariable=self.status_var, wraplength=750).pack(anchor="w")
+        ttk.Label(outer, textvariable=self.status_var, wraplength=860).pack(anchor="w")
 
-        ttk.Separator(outer).pack(fill="x", pady=16)
-        ttk.Label(outer, textvariable=self.title_var, font=("Segoe UI", 12, "bold"), wraplength=750).pack(anchor="w")
+        ttk.Separator(outer).pack(fill="x", pady=14)
+        ttk.Label(outer, textvariable=self.title_var, font=("Segoe UI", 12, "bold"), wraplength=860).pack(anchor="w")
         ttk.Label(outer, textvariable=self.meta_var).pack(anchor="w", pady=(3, 8))
+        ttk.Label(outer, text="다운로드 옵션", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(2, 6))
 
-        list_frame = ttk.Frame(outer)
-        list_frame.pack(fill="both", expand=True)
-        self.asset_list = tk.Listbox(
-            list_frame,
-            activestyle="dotbox",
-            font=("Segoe UI", 10),
-            height=10,
-            selectmode=tk.SINGLE,
-            exportselection=False,
-        )
-        scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.asset_list.yview)
-        self.asset_list.configure(yscrollcommand=scroll.set)
-        self.asset_list.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
-        self.asset_list.bind("<Double-Button-1>", lambda _e: self.download_selected())
-
-        self.download_button = ttk.Button(outer, text="선택 항목 다운로드", command=self.download_selected, state="disabled")
-        self.download_button.pack(fill="x", pady=(12, 0), ipady=6)
+        cards_border = ttk.Frame(outer)
+        cards_border.pack(fill="both", expand=True)
+        self.cards_canvas = tk.Canvas(cards_border, highlightthickness=0, borderwidth=0)
+        cards_scroll = ttk.Scrollbar(cards_border, orient="vertical", command=self.cards_canvas.yview)
+        self.cards_canvas.configure(yscrollcommand=cards_scroll.set)
+        self.cards_canvas.pack(side="left", fill="both", expand=True)
+        cards_scroll.pack(side="right", fill="y")
+        self.cards_frame = ttk.Frame(self.cards_canvas)
+        self.cards_window = self.cards_canvas.create_window((0, 0), window=self.cards_frame, anchor="nw")
+        self.cards_frame.bind("<Configure>", self._sync_scrollregion)
+        self.cards_canvas.bind("<Configure>", self._sync_cards_width)
+        self.cards_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         completed_row = ttk.Frame(outer)
-        completed_row.pack(fill="x", pady=(8, 0))
+        completed_row.pack(fill="x", pady=(10, 0))
         self.open_file_button = ttk.Button(completed_row, text="저장 파일 열기", command=self._open_last_file, state="disabled")
         self.open_file_button.pack(side="left", fill="x", expand=True)
         self.open_folder_button = ttk.Button(completed_row, text="저장 폴더 열기", command=self._open_download_folder)
@@ -141,7 +150,19 @@ class DownloaderApp(tk.Tk):
             outer,
             text="본인이 소유하거나 저장 권한이 있는 공개 콘텐츠만 다운로드하세요.",
             foreground="#666666",
-        ).pack(anchor="w", pady=(12, 0))
+        ).pack(anchor="w", pady=(10, 0))
+
+    def _sync_scrollregion(self, _event=None) -> None:
+        self.cards_canvas.configure(scrollregion=self.cards_canvas.bbox("all"))
+
+    def _sync_cards_width(self, event) -> None:
+        self.cards_canvas.itemconfigure(self.cards_window, width=event.width)
+
+    def _on_mousewheel(self, event) -> None:
+        try:
+            self.cards_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        except tk.TclError:
+            pass
 
     def _set_progress_indeterminate(self) -> None:
         self.progress.stop()
@@ -159,7 +180,8 @@ class DownloaderApp(tk.Tk):
     def _set_busy(self, busy: bool, text: str | None = None) -> None:
         self.busy = busy
         self.analyze_button.configure(state="disabled" if busy else "normal")
-        self.download_button.configure(state="disabled" if busy or not self.assets else "normal")
+        for button in self.download_buttons:
+            button.configure(state="disabled" if busy else "normal")
         if busy:
             self._set_progress_indeterminate()
         else:
@@ -186,17 +208,23 @@ class DownloaderApp(tk.Tk):
         self.url_var.set(text)
         self.url_entry.focus_set()
 
+    def _clear_cards(self) -> None:
+        for child in self.cards_frame.winfo_children():
+            child.destroy()
+        self.download_buttons.clear()
+        self.preview_labels.clear()
+        self.preview_images.clear()
+
     def _clear_url(self) -> None:
         if self.busy:
             return
         self.url_var.set("")
         self.analysis = None
         self.assets = []
-        self.asset_list.delete(0, tk.END)
+        self._clear_cards()
         self.title_var.set("")
         self.meta_var.set("")
         self.status_var.set("링크를 붙여넣고 분석을 누르세요.")
-        self.download_button.configure(state="disabled")
         self.url_entry.focus_set()
 
     def _choose_folder(self) -> None:
@@ -212,6 +240,88 @@ class DownloaderApp(tk.Tk):
         else:
             self.platform_var.set("지원: YouTube · Instagram · Threads · Douyin · Xiaohongshu/RedNote")
 
+    @staticmethod
+    def _kind_name(kind: str) -> str:
+        return {
+            "video": "영상",
+            "image": "이미지",
+            "thumbnail": "썸네일/커버",
+            "archive": "묶음 파일",
+        }.get(kind, "미디어")
+
+    @staticmethod
+    def _orientation(width: int | None, height: int | None) -> str:
+        if not width or not height:
+            return ""
+        ratio = width / height
+        if 0.92 <= ratio <= 1.08:
+            return "정사각형"
+        return "가로" if ratio > 1 else "세로"
+
+    def _render_cards(self, data: dict) -> None:
+        self._clear_cards()
+        raw_assets = data.get("assets") or []
+        for index, asset in enumerate(self.assets):
+            raw = raw_assets[index] if index < len(raw_assets) and isinstance(raw_assets[index], dict) else {}
+            card = ttk.Frame(self.cards_frame, padding=8, relief="solid", borderwidth=1)
+            card.pack(fill="x", pady=(0, 8), padx=(0, 4))
+
+            preview = tk.Label(
+                card,
+                text="미리보기\n불러오는 중",
+                width=16,
+                height=6,
+                bg="#f2f2f2",
+                fg="#666666",
+                relief="flat",
+            )
+            preview.pack(side="left", padx=(0, 12))
+            self.preview_labels.append(preview)
+
+            info = ttk.Frame(card)
+            info.pack(side="left", fill="both", expand=True)
+            ttk.Label(info, text=asset.label or self._kind_name(asset.kind), font=("Segoe UI", 11, "bold")).pack(anchor="w")
+            orientation = self._orientation(asset.width, asset.height)
+            detail_parts = [self._kind_name(asset.kind)]
+            if asset.ext:
+                detail_parts.append(asset.ext.upper())
+            if asset.width and asset.height:
+                detail_parts.append(f"{asset.width}×{asset.height}")
+            if orientation:
+                detail_parts.append(orientation)
+            ttk.Label(info, text=" · ".join(detail_parts)).pack(anchor="w", pady=(4, 0))
+            hint = {
+                "video": "게시물 영상 파일",
+                "image": "게시물 원본 이미지",
+                "thumbnail": "영상/게시물의 커버 이미지",
+                "archive": "여러 이미지를 한 번에 저장",
+            }.get(asset.kind, "다운로드 가능한 미디어")
+            ttk.Label(info, text=hint, foreground="#666666").pack(anchor="w", pady=(3, 0))
+
+            button = ttk.Button(card, text="다운로드", command=lambda i=index: self.download_index(i))
+            button.pack(side="right", padx=(12, 0), ipadx=8, ipady=4)
+            self.download_buttons.append(button)
+
+            preview_url = str(raw.get("preview_url") or "")
+            if preview_url.startswith("https://"):
+                threading.Thread(target=self._preview_worker, args=(index, preview_url), daemon=True).start()
+            else:
+                preview.configure(text="미리보기 없음")
+
+    def _preview_worker(self, index: int, url: str) -> None:
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": _PREVIEW_UA})
+            with urllib.request.urlopen(request, timeout=20) as response:
+                length = response.headers.get("Content-Length")
+                if length and length.isdigit() and int(length) > _PREVIEW_MAX_BYTES:
+                    raise ValueError("preview too large")
+                raw = response.read(_PREVIEW_MAX_BYTES + 1)
+                if len(raw) > _PREVIEW_MAX_BYTES:
+                    raise ValueError("preview too large")
+            self.events.put(("preview", (index, raw)))
+        except Exception:
+            self.events.put(("preview_error", index))
+
     def analyze(self) -> None:
         if self.busy:
             return
@@ -220,9 +330,9 @@ class DownloaderApp(tk.Tk):
             messagebox.showwarning("지원하지 않는 링크", "지원 플랫폼의 공개 링크를 입력해 주세요.")
             return
         self.url_var.set(url)
-        self.asset_list.delete(0, tk.END)
         self.assets = []
         self.analysis = None
+        self._clear_cards()
         self.title_var.set("")
         self.meta_var.set("")
         self._set_busy(True, "링크를 분석하고 있습니다…")
@@ -240,12 +350,8 @@ class DownloaderApp(tk.Tk):
         except Exception as exc:
             self.events.put(("error", exc))
 
-    def download_selected(self) -> None:
-        if self.busy or not self.analysis or not self.assets:
-            return
-        selection = self.asset_list.curselection()
-        if not selection:
-            messagebox.showinfo("파일 선택", "다운로드할 항목을 선택해 주세요.")
+    def download_index(self, index: int) -> None:
+        if self.busy or not self.analysis or not self.assets or index < 0 or index >= len(self.assets):
             return
         folder = Path(self.folder_var.get()).expanduser()
         try:
@@ -254,13 +360,12 @@ class DownloaderApp(tk.Tk):
             messagebox.showerror("저장 폴더", f"저장 폴더를 사용할 수 없습니다.\n\n{exc}")
             return
 
-        index = int(selection[0])
         asset = self.assets[index]
         source_url = str(self.analysis.get("source_url") or self.url_var.get())
         token = str(self.analysis.get("analysis_token") or "")
         self.last_file = None
         self.open_file_button.configure(state="disabled")
-        self._set_busy(True, "서버에서 파일을 준비하고 있습니다…")
+        self._set_busy(True, f"{asset.label} 파일을 준비하고 있습니다…")
         threading.Thread(target=self._download_worker, args=(source_url, token, asset, folder), daemon=True).start()
 
     def _download_worker(self, url: str, token: str, asset, folder: Path) -> None:
@@ -292,10 +397,8 @@ class DownloaderApp(tk.Tk):
 
     def _open_download_folder(self) -> None:
         folder = Path(self.folder_var.get()).expanduser()
-        if not folder.exists():
-            messagebox.showinfo("폴더 열기", "저장 폴더가 아직 존재하지 않습니다.")
-            return
         try:
+            folder.mkdir(parents=True, exist_ok=True)
             os.startfile(str(folder))  # type: ignore[attr-defined]
         except OSError as exc:
             messagebox.showerror("폴더 열기", str(exc))
@@ -377,10 +480,25 @@ class DownloaderApp(tk.Tk):
                     platform = str(data.get("platform") or "")
                     author = str(data.get("author") or "")
                     self.meta_var.set(" · ".join(x for x in [author, SUPPORTED_PLATFORMS.get(platform, platform)] if x))
-                    for asset in assets:
-                        self.asset_list.insert(tk.END, asset.display)
-                    self.asset_list.selection_set(0)
-                    self._set_busy(False, f"{len(assets)}개 다운로드 옵션을 찾았습니다.")
+                    self._render_cards(data)
+                    self._set_busy(False, f"{len(assets)}개 다운로드 옵션을 찾았습니다. 미리보기를 보고 원하는 항목을 다운로드하세요.")
+                elif kind == "preview":
+                    index, raw = payload
+                    if index < len(self.preview_labels):
+                        try:
+                            image = Image.open(io.BytesIO(raw))
+                            image.thumbnail((128, 96), Image.Resampling.LANCZOS)
+                            if image.mode not in {"RGB", "RGBA"}:
+                                image = image.convert("RGB")
+                            photo = ImageTk.PhotoImage(image)
+                            self.preview_images[index] = photo
+                            self.preview_labels[index].configure(image=photo, text="", width=128, height=96)
+                        except Exception:
+                            self.preview_labels[index].configure(text="미리보기 실패")
+                elif kind == "preview_error":
+                    index = int(payload)
+                    if index < len(self.preview_labels):
+                        self.preview_labels[index].configure(text="미리보기 없음")
                 elif kind == "status":
                     self.status_var.set(str(payload))
                 elif kind == "bytes":
@@ -395,7 +513,8 @@ class DownloaderApp(tk.Tk):
                     self.last_file = Path(payload)
                     self._set_busy(False, f"저장 완료: {payload}")
                     self.open_file_button.configure(state="normal")
-                    messagebox.showinfo("다운로드 완료", f"파일을 저장했습니다.\n\n{payload}")
+                    if messagebox.askyesno("다운로드 완료", f"파일을 저장했습니다.\n\n{payload}\n\n저장 폴더를 열까요?"):
+                        self._open_download_folder()
                 elif kind == "error":
                     self._set_busy(False, "오류가 발생했습니다.")
                     messagebox.showerror("AVOCADOSS Downloader", str(payload))
