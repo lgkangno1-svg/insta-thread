@@ -35,6 +35,10 @@ jobs:
         run: |
           $env:PYTHONPATH = (Resolve-Path desktop).Path
           python -m unittest desktop/test_core.py -v
+          python -m py_compile desktop/core.py desktop/app.py desktop/make_windows_resources.py
+
+      - name: Generate Windows icon and version resources
+        run: python desktop/make_windows_resources.py
 
       - name: Install PyInstaller
         run: python -m pip install --upgrade "pyinstaller>=6.10,<7"
@@ -45,21 +49,66 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed `
             --name AVOCADOSS-Downloader `
             --paths desktop `
+            --icon desktop/assets/app.ico `
+            --version-file desktop/assets/version_info.txt `
+            --add-data "desktop/VERSION;." `
+            --add-data "desktop/assets/app.ico;assets" `
             desktop/app.py
           if (-not (Test-Path dist/AVOCADOSS-Downloader.exe)) { throw 'EXE was not created' }
 
-      - name: Smoke-check executable metadata
+      - name: Verify executable metadata and checksum
         shell: pwsh
         run: |
+          $version = (Get-Content desktop/VERSION -Raw).Trim()
           $file = Get-Item dist/AVOCADOSS-Downloader.exe
           if ($file.Length -lt 1000000) { throw 'EXE is unexpectedly small' }
-          Write-Host "Built $($file.FullName) ($($file.Length) bytes)"
-          Get-FileHash $file.FullName -Algorithm SHA256
+          $info = $file.VersionInfo
+          if ($info.ProductVersion -ne $version) { throw "ProductVersion mismatch: $($info.ProductVersion) vs $version" }
+          $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  AVOCADOSS-Downloader.exe" | Set-Content -NoNewline -Encoding ascii dist/AVOCADOSS-Downloader.exe.sha256
+          Write-Host "Built $($file.FullName) ($($file.Length) bytes), version $version, SHA256 $hash"
 
-      - name: Upload EXE artifact
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: AVOCADOSS-Downloader-Windows
-          path: dist/AVOCADOSS-Downloader.exe
+          path: |
+            dist/AVOCADOSS-Downloader.exe
+            dist/AVOCADOSS-Downloader.exe.sha256
           if-no-files-found: error
           retention-days: 30
+
+  publish-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AVOCADOSS-Downloader-Windows
+          path: release
+
+      - name: Publish versioned desktop release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n ' < desktop/VERSION)"
+          tag="desktop-v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving it unchanged."
+            exit 0
+          fi
+          gh release create "$tag" \
+            release/AVOCADOSS-Downloader.exe \
+            release/AVOCADOSS-Downloader.exe.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "AVOCADOSS Downloader v${version}" \
+            --notes "Ad-free Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Includes SHA-256 verified in-app update support."
