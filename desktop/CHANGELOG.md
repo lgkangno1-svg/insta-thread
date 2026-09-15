@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0
+
+- Adds one-click whole-post downloads for photo/video carousels while excluding duplicate cover thumbnails when primary media is available.
+- Remembers the last selected download folder between app launches.
+- Renames generic files such as `download.mp4` to readable platform/author/post/media names when safe to do so.
+- Adds a failed-item retry button for partial batch failures.
+- Shows aggregate progress while downloading multiple media items sequentially.
+- Keeps individual media-card downloads and the Instagram local fallback unchanged.
+
+## 1.2.1
+
+- Adds a local public-Instagram fallback when the production backend is temporarily behind or unavailable for Instagram parsing.
+- Supports public Instagram photo posts, video posts and mixed carousels through the anonymous public media endpoint.
+- Restricts direct fallback downloads to trusted Instagram/Facebook CDN HTTPS hosts.
+
 ## 1.2.0
 
 - Replaces the ambiguous text-only download option list with thumbnail preview cards.
