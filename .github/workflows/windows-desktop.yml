@@ -1,0 +1,65 @@
+name: Windows Desktop EXE
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/windows-desktop.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Run desktop unit tests
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = (Resolve-Path desktop).Path
+          python -m unittest desktop/test_core.py -v
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade "pyinstaller>=6.10,<7"
+
+      - name: Build single-file GUI executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name AVOCADOSS-Downloader `
+            --paths desktop `
+            desktop/app.py
+          if (-not (Test-Path dist/AVOCADOSS-Downloader.exe)) { throw 'EXE was not created' }
+
+      - name: Smoke-check executable metadata
+        shell: pwsh
+        run: |
+          $file = Get-Item dist/AVOCADOSS-Downloader.exe
+          if ($file.Length -lt 1000000) { throw 'EXE is unexpectedly small' }
+          Write-Host "Built $($file.FullName) ($($file.Length) bytes)"
+          Get-FileHash $file.FullName -Algorithm SHA256
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AVOCADOSS-Downloader-Windows
+          path: dist/AVOCADOSS-Downloader.exe
+          if-no-files-found: error
+          retention-days: 30

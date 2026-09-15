@@ -1,0 +1,1 @@
+The Windows app reads only text the user pastes or copies into the app. When the user clicks Analyze, that URL is sent to https://download.avocadoss.co.kr for media analysis and temporary download preparation. The app does not read browser cookies, account credentials, browser history, or private tabs. Downloaded files are written only to the folder selected by the user.

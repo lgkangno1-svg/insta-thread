@@ -1,0 +1,1 @@
+This desktop client is distributed with the repository and is subject to the repository's existing license and notices.
