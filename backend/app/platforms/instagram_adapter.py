@@ -26,6 +26,15 @@ def _shortcode(url: str) -> str:
     return match.group("code")
 
 
+def _canonical_url(url: str, shortcode: str) -> str:
+    lowered = url.lower()
+    if "/p/" in lowered:
+        return f"https://www.instagram.com/p/{shortcode}/"
+    if "/tv/" in lowered:
+        return f"https://www.instagram.com/tv/{shortcode}/"
+    return f"https://www.instagram.com/reel/{shortcode}/"
+
+
 def _query(shortcode: str) -> dict[str, Any]:
     headers = {
         "User-Agent": _UA,
@@ -49,7 +58,7 @@ def _query(shortcode: str) -> dict[str, Any]:
                 headers={
                     "Accept": "*/*",
                     "Origin": "https://www.instagram.com",
-                    "Referer": f"https://www.instagram.com/reel/{shortcode}/",
+                    "Referer": f"https://www.instagram.com/p/{shortcode}/",
                     "X-CSRFToken": csrf,
                     "X-IG-App-ID": _APP_ID,
                     "Content-Type": "application/x-www-form-urlencoded",
@@ -93,12 +102,17 @@ def _image_candidates(item: dict[str, Any]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
     for candidate in candidates:
-        url = candidate["url"]
-        if url in seen:
+        candidate_url = candidate["url"]
+        if candidate_url in seen:
             continue
-        seen.add(url)
+        seen.add(candidate_url)
         out.append(candidate)
     return out
+
+
+def _media_items(item: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
+    carousel = [x for x in (item.get("carousel_media") or []) if isinstance(x, dict)]
+    return (carousel, True) if carousel else ([item], False)
 
 
 def _caption(item: dict[str, Any]) -> str | None:
@@ -113,38 +127,100 @@ def _caption(item: dict[str, Any]) -> str | None:
 def analyze(url: str) -> AnalyzeResponse:
     shortcode = _shortcode(url)
     item = _query(shortcode)
-    videos = _video_candidates(item)
-    images = _image_candidates(item)
-    if not videos:
-        raise HTTPException(status_code=422, detail="No downloadable video was found in this Instagram post")
+    media_items, is_carousel = _media_items(item)
+    assets: list[MediaAsset] = []
+    preview: str | None = None
 
-    assets: list[MediaAsset] = [
-        MediaAsset(id="video:best", kind="video", label="Best available", ext="mp4")
-    ]
-    for idx, image in enumerate(images[:8]):
-        width, height = image.get("width"), image.get("height")
-        dims = f"{width}×{height}" if width and height else "thumbnail"
-        assets.append(
-            MediaAsset(
-                id=f"thumbnail:{idx}",
-                kind="thumbnail",
-                label=f"Thumbnail {dims}",
-                width=width,
-                height=height,
-                ext="jpg",
-                preview_url=image["url"],
+    if is_carousel:
+        for idx, media in enumerate(media_items):
+            videos = _video_candidates(media)
+            images = _image_candidates(media)
+            best_image = images[0] if images else None
+            if preview is None and best_image:
+                preview = best_image["url"]
+
+            if videos:
+                best = videos[0]
+                assets.append(
+                    MediaAsset(
+                        id=f"video:{idx}",
+                        kind="video",
+                        label=f"Video {idx + 1}",
+                        width=best.get("width") if isinstance(best.get("width"), int) else None,
+                        height=best.get("height") if isinstance(best.get("height"), int) else None,
+                        ext="mp4",
+                        preview_url=best_image["url"] if best_image else None,
+                    )
+                )
+            elif best_image:
+                assets.append(
+                    MediaAsset(
+                        id=f"image:{idx}",
+                        kind="image",
+                        label=f"Image {idx + 1}",
+                        width=best_image.get("width") if isinstance(best_image.get("width"), int) else None,
+                        height=best_image.get("height") if isinstance(best_image.get("height"), int) else None,
+                        ext="jpg",
+                        preview_url=best_image["url"],
+                    )
+                )
+    else:
+        videos = _video_candidates(item)
+        images = _image_candidates(item)
+        best_image = images[0] if images else None
+        preview = best_image["url"] if best_image else None
+
+        if videos:
+            best = videos[0]
+            assets.append(
+                MediaAsset(
+                    id="video:best",
+                    kind="video",
+                    label="Best available video",
+                    width=best.get("width") if isinstance(best.get("width"), int) else None,
+                    height=best.get("height") if isinstance(best.get("height"), int) else None,
+                    ext="mp4",
+                    preview_url=preview,
+                )
             )
-        )
+            for idx, image in enumerate(images[:4]):
+                width, height = image.get("width"), image.get("height")
+                dims = f"{width}×{height}" if width and height else "cover"
+                assets.append(
+                    MediaAsset(
+                        id=f"thumbnail:{idx}",
+                        kind="thumbnail",
+                        label=f"Cover {dims}",
+                        width=width if isinstance(width, int) else None,
+                        height=height if isinstance(height, int) else None,
+                        ext="jpg",
+                        preview_url=image["url"],
+                    )
+                )
+        elif best_image:
+            assets.append(
+                MediaAsset(
+                    id="image:0",
+                    kind="image",
+                    label="Original image",
+                    width=best_image.get("width") if isinstance(best_image.get("width"), int) else None,
+                    height=best_image.get("height") if isinstance(best_image.get("height"), int) else None,
+                    ext="jpg",
+                    preview_url=best_image["url"],
+                )
+            )
+
+    if not assets:
+        raise HTTPException(status_code=422, detail="No downloadable public media was found in this Instagram post")
 
     user = item.get("user") or {}
     username = user.get("username") if isinstance(user, dict) else None
-    title = _caption(item) or f"Instagram Reel {shortcode}"
-    preview = images[0]["url"] if images else None
+    title = _caption(item) or f"Instagram post {shortcode}"
     return AnalyzeResponse(
         platform="instagram",
         title=title[:300],
         author=f"@{username}" if username else None,
-        webpage_url=f"https://www.instagram.com/reel/{shortcode}/",
+        webpage_url=_canonical_url(url, shortcode),
         preview_url=preview,
         assets=assets,
     )
@@ -153,17 +229,36 @@ def analyze(url: str) -> AnalyzeResponse:
 def resolve_asset(url: str, asset_id: str) -> tuple[str, str]:
     shortcode = _shortcode(url)
     item = _query(shortcode)
+    media_items, is_carousel = _media_items(item)
+
     if asset_id == "video:best":
         videos = _video_candidates(item)
         if not videos:
             raise HTTPException(status_code=404, detail="Instagram video is no longer available")
         return videos[0]["url"], "mp4"
 
+    media_match = re.fullmatch(r"(video|image):(\d+)", asset_id)
+    if media_match:
+        kind = media_match.group(1)
+        index = int(media_match.group(2))
+        if index >= len(media_items):
+            raise HTTPException(status_code=404, detail="Instagram media item is no longer available")
+        media = media_items[index]
+        if kind == "video":
+            videos = _video_candidates(media)
+            if not videos:
+                raise HTTPException(status_code=404, detail="Instagram video is no longer available")
+            return videos[0]["url"], "mp4"
+        images = _image_candidates(media)
+        if not images:
+            raise HTTPException(status_code=404, detail="Instagram image is no longer available")
+        return images[0]["url"], "jpg"
+
     match = re.fullmatch(r"thumbnail:(\d+)", asset_id)
-    if not match:
+    if not match or is_carousel:
         raise HTTPException(status_code=400, detail="Invalid Instagram asset id")
-    images = _image_candidates(item)[:8]
+    images = _image_candidates(item)[:4]
     index = int(match.group(1))
     if index >= len(images):
-        raise HTTPException(status_code=404, detail="Instagram thumbnail is no longer available")
+        raise HTTPException(status_code=404, detail="Instagram cover image is no longer available")
     return images[index]["url"], "jpg"
