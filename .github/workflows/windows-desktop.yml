@@ -37,8 +37,8 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = (Resolve-Path desktop).Path
-          python -m unittest desktop/test_core.py -v
-          python -m py_compile desktop/core.py desktop/app.py desktop/make_windows_resources.py
+          python -m unittest desktop/test_core.py desktop/test_instagram_fallback.py -v
+          python -m py_compile desktop/core.py desktop/app.py desktop/instagram_fallback.py desktop/instagram_runtime_hook.py desktop/make_windows_resources.py
 
       - name: Generate Windows icon and version resources
         run: python desktop/make_windows_resources.py
@@ -49,6 +49,8 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed `
             --name AVOCADOSS-Downloader `
             --paths desktop `
+            --runtime-hook desktop/instagram_runtime_hook.py `
+            --hidden-import instagram_fallback `
             --icon desktop/assets/app.ico `
             --version-file desktop/assets/version_info.txt `
             --add-data "desktop/VERSION;." `
@@ -111,4 +113,4 @@ jobs:
             release/AVOCADOSS-Downloader.exe.sha256 \
             --target "$GITHUB_SHA" \
             --title "AVOCADOSS Downloader v${version}" \
-            --notes "Ad-free Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Includes thumbnail preview cards and SHA-256 verified in-app update support."
+            --notes "Ad-free Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Includes thumbnail preview cards, a local public-Instagram fallback when the production backend is temporarily behind, and SHA-256 verified in-app update support."
