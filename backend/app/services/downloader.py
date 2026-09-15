@@ -40,8 +40,6 @@ def analyze(url: str):
     else:
         result = ytdlp_adapter.analyze(resolved_url, route.platform)
 
-    # Keep the ticket bound to the normalized URL accepted from the user. Wrapper
-    # resolution can be repeated safely when the background job starts.
     token = issue_analysis_token(source_url, [asset.id for asset in result.assets])
     return result.model_copy(update={
         "analysis_token": token,
@@ -57,6 +55,10 @@ def validate_asset_id(url: str, asset_id: str) -> None:
         if not re.fullmatch(r"asset:\d+", asset_id):
             raise HTTPException(status_code=400, detail="Invalid Threads asset selection")
         return
+    if route.platform == "instagram":
+        if asset_id == "video:best" or re.fullmatch(r"(?:video|image|thumbnail):\d+", asset_id):
+            return
+        raise HTTPException(status_code=400, detail="Invalid Instagram asset selection")
     if route.platform == "xiaohongshu":
         if asset_id in {"video:best", "images:zip"} or re.fullmatch(r"image:\d+", asset_id):
             return
@@ -66,8 +68,6 @@ def validate_asset_id(url: str, asset_id: str) -> None:
             return
         raise HTTPException(status_code=400, detail="Invalid Douyin asset selection")
     if re.fullmatch(r"video:(?:best|\d{3,4})", asset_id):
-        return
-    if route.platform == "instagram" and re.fullmatch(r"thumbnail:\d+", asset_id):
         return
     raise HTTPException(status_code=400, detail="Invalid asset selection for this platform")
 
