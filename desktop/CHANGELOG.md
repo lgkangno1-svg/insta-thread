@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2
+
+- Replaces the silent `.cmd` self-update handoff with a Unicode-safe hidden PowerShell updater.
+- Waits for the running EXE to exit, retries replacement up to 20 times, and verifies the copied EXE with SHA-256 before relaunching it.
+- Writes a local updater log in the Windows temp directory so replacement failures are no longer silent.
+- Falls back to launching the already SHA-256-verified downloaded EXE if the original portable EXE cannot be replaced.
+- Adds Windows CI regression coverage for Korean/Unicode paths and quoted filenames in the updater handoff.
+
 ## 1.3.1
 
 - Reworks the Windows client into a compact preview-first layout so download controls stay visible without excessive scrolling.

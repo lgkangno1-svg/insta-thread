@@ -37,8 +37,8 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = (Resolve-Path desktop).Path
-          python -m unittest desktop/test_core.py desktop/test_instagram_fallback.py desktop/test_desktop_extras.py -v
-          python -m py_compile desktop/core.py desktop/app.py desktop/app_enhanced.py desktop/app_compact.py desktop/desktop_extras.py desktop/instagram_fallback.py desktop/instagram_runtime_hook.py desktop/make_windows_resources.py
+          python -m unittest desktop/test_core.py desktop/test_instagram_fallback.py desktop/test_desktop_extras.py desktop/test_windows_updater.py -v
+          python -m py_compile desktop/core.py desktop/app.py desktop/app_enhanced.py desktop/app_compact.py desktop/desktop_extras.py desktop/instagram_fallback.py desktop/instagram_runtime_hook.py desktop/windows_updater.py desktop/make_windows_resources.py
 
       - name: Generate Windows icon and version resources
         run: python desktop/make_windows_resources.py
@@ -51,6 +51,7 @@ jobs:
             --paths desktop `
             --runtime-hook desktop/instagram_runtime_hook.py `
             --hidden-import instagram_fallback `
+            --hidden-import windows_updater `
             --icon desktop/assets/app.ico `
             --version-file desktop/assets/version_info.txt `
             --add-data "desktop/VERSION;." `
@@ -113,4 +114,4 @@ jobs:
             release/AVOCADOSS-Downloader.exe.sha256 \
             --target "$GITHUB_SHA" \
             --title "AVOCADOSS Downloader v${version}" \
-            --notes "Compact preview-first Windows UI: tighter link/folder controls, a small post preview panel, two-column media cards, direct video/image/thumbnail download buttons, representative-video quick download, whole-post batch download, thumbnail fallback for video cards, remembered download folder, readable filenames, retry support, public-Instagram fallback, and SHA-256 verified in-app updates."
+            --notes "Compact preview-first Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Includes media preview cards, whole-post batch download, readable filenames, public-Instagram fallback, and a hardened Unicode-safe self-updater with replacement retries, post-copy SHA-256 verification, and local failure logging."
