@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.5
+
+- Adds a separate `샤오홍슈 검색` workspace so research does not mix with the downloader UI.
+- Translates Korean search keywords to Simplified Chinese automatically, with an editable Chinese keyword field for manual correction.
+- Searches the real Xiaohongshu web results through a dedicated Edge/Chrome browser profile instead of calling fragile signed private APIs directly.
+- Shows search-result thumbnail, title, author, note type and available like/save/comment counts inside the app.
+- Adds `샤오홍슈에서 열기`, link copy, and `다운로드 탭으로` actions for every result.
+- Preserves the dedicated browser profile so a Xiaohongshu login, when the site requires it, can persist across app sessions.
+- Adds Google Translate-compatible no-key translation with a MyMemory fallback and manual-Chinese search fallback.
+
+## 1.3.4
+
+- Collapses platform-generated duplicate thumbnail/cover size variants to one representative thumbnail download choice.
+- Keeps all real video/image/carousel media choices while selecting the highest-resolution thumbnail, with filesize as a tie-breaker.
+
 ## 1.3.3
 
 - Gives the download system more vertical space by replacing the expanding post-body label with a fixed four-row text panel.
