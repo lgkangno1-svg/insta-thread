@@ -37,8 +37,8 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = (Resolve-Path desktop).Path
-          python -m unittest desktop/test_core.py desktop/test_instagram_fallback.py desktop/test_desktop_extras.py desktop/test_windows_updater.py desktop/test_compact_post_panel.py -v
-          python -m py_compile desktop/core.py desktop/app.py desktop/app_enhanced.py desktop/app_compact.py desktop/desktop_extras.py desktop/instagram_fallback.py desktop/instagram_runtime_hook.py desktop/windows_updater.py desktop/make_windows_resources.py
+          python -m unittest desktop/test_core.py desktop/test_instagram_fallback.py desktop/test_desktop_extras.py desktop/test_windows_updater.py desktop/test_compact_post_panel.py desktop/test_xhs_search.py -v
+          python -m py_compile desktop/core.py desktop/app.py desktop/app_enhanced.py desktop/app_compact.py desktop/app_workspace.py desktop/desktop_extras.py desktop/instagram_fallback.py desktop/instagram_runtime_hook.py desktop/windows_updater.py desktop/xhs_search.py desktop/make_windows_resources.py
 
       - name: Generate Windows icon and version resources
         run: python desktop/make_windows_resources.py
@@ -52,11 +52,12 @@ jobs:
             --runtime-hook desktop/instagram_runtime_hook.py `
             --hidden-import instagram_fallback `
             --hidden-import windows_updater `
+            --hidden-import websocket `
             --icon desktop/assets/app.ico `
             --version-file desktop/assets/version_info.txt `
             --add-data "desktop/VERSION;." `
             --add-data "desktop/assets/app.ico;assets" `
-            desktop/app_compact.py
+            desktop/app_workspace.py
           if (-not (Test-Path dist/AVOCADOSS-Downloader.exe)) { throw 'EXE was not created' }
 
       - name: Verify executable metadata and checksum
@@ -114,4 +115,4 @@ jobs:
             release/AVOCADOSS-Downloader.exe.sha256 \
             --target "$GITHUB_SHA" \
             --title "AVOCADOSS Downloader v${version}" \
-            --notes "Preview-first Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Long post text now stays inside a fixed-height scrollable selectable panel with one-click full-copy and a resizable full-text viewer, preserving more screen space for media preview cards and download controls. Includes whole-post batch download, readable filenames, public-Instagram fallback, and the hardened SHA-256 verified self-updater."
+            --notes "Windows downloader plus a separate Xiaohongshu research workspace. Enter a Korean keyword, translate it to Simplified Chinese, search Xiaohongshu through a dedicated real Edge/Chrome session, and review result thumbnails, titles, authors and engagement metadata without mixing the research UI into the downloader. Search results can be opened, copied, or sent directly to the download workspace."
