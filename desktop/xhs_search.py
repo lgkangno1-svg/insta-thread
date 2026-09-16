@@ -148,7 +148,7 @@ _EXTRACT_SCRIPT = r"""
 (() => {
   const result = { items: [], loginRequired: false, href: location.href, title: document.title || '' };
   const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
-  result.loginRequired = /登录后查看|扫码登录|登录小红书|登录\/注册/.test(bodyText);
+  result.loginRequired = /登录后查看搜索结果|扫码登录|登录小红书后查看/.test(bodyText);
   let state = window.__INITIAL_STATE__ || {};
   let feeds = state && state.search ? state.search.feeds : null;
   if (feeds && typeof feeds === 'object') feeds = feeds._value ?? feeds.value ?? feeds;
@@ -216,15 +216,27 @@ class XiaohongshuBrowserSearch:
         self.browser_path = _find_browser()
         self.process: subprocess.Popen | None = None
         self.port: int | None = None
+        self.active_target_id: str | None = None
         self.profile_dir = _browser_profile_dir()
+
+    def _debug_port_alive(self) -> bool:
+        if not self.port:
+            return False
+        try:
+            _json_get(f"http://127.0.0.1:{self.port}/json/version", timeout=1.0)
+            return True
+        except Exception:
+            return False
 
     def _ensure_browser(self, url: str) -> None:
         if self.browser_path is None:
             raise XhsSearchError("Microsoft Edge 또는 Google Chrome을 찾지 못했습니다.")
-        if self.process is not None and self.process.poll() is None and self.port:
+        if self._debug_port_alive():
             self._navigate_new_tab(url)
             return
 
+        self.process = None
+        self.active_target_id = None
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self.port = _free_port()
         args = [
@@ -264,21 +276,28 @@ class XiaohongshuBrowserSearch:
             method="PUT",
         )
         try:
-            with urllib.request.urlopen(request, timeout=3):
-                return
+            with urllib.request.urlopen(request, timeout=3) as response:
+                payload = json.loads(response.read().decode("utf-8", errors="replace"))
+            target_id = str(payload.get("id") or "")
+            self.active_target_id = target_id or None
         except Exception:
-            pass
+            self.active_target_id = None
 
     def _search_target(self) -> dict[str, Any]:
         if not self.port:
             raise XhsSearchError("검색 브라우저 연결이 없습니다.")
         targets = _json_get(f"http://127.0.0.1:{self.port}/json/list")
+        if self.active_target_id:
+            for item in targets:
+                if str(item.get("id") or "") == self.active_target_id:
+                    return item
         pages = [
             item for item in targets
             if item.get("type") == "page" and "xiaohongshu.com/search_result" in str(item.get("url") or "")
         ]
         if not pages:
             raise XhsSearchError("샤오홍슈 검색 페이지를 찾지 못했습니다.")
+        self.active_target_id = str(pages[0].get("id") or "") or None
         return pages[0]
 
     def _evaluate(self, expression: str) -> Any:
@@ -312,8 +331,10 @@ class XiaohongshuBrowserSearch:
         if not keyword:
             raise XhsSearchError("중국어 검색어가 비어 있습니다.")
         self._ensure_browser(build_search_url(keyword))
-        deadline = time.monotonic() + 18
+        started = time.monotonic()
+        deadline = started + 18
         latest: dict[str, Any] = {"items": []}
+        login_seen = False
         while time.monotonic() < deadline:
             time.sleep(0.7)
             try:
@@ -324,17 +345,23 @@ class XiaohongshuBrowserSearch:
             items = latest.get("items") or []
             if items:
                 return [XhsSearchItem(**item) for item in items[: max(1, min(limit, 40))]]
-            if latest.get("loginRequired"):
+            login_seen = login_seen or bool(latest.get("loginRequired"))
+            if login_seen and time.monotonic() - started >= 4.0:
                 raise XhsLoginRequired(
                     "샤오홍슈가 검색 결과를 로그인 사용자에게만 보여주고 있습니다. "
                     "열린 Edge/Chrome 창에서 한 번 로그인한 뒤 다시 검색해 주세요."
                 )
+        if login_seen:
+            raise XhsLoginRequired(
+                "샤오홍슈가 검색 결과를 로그인 사용자에게만 보여주고 있습니다. "
+                "열린 Edge/Chrome 창에서 한 번 로그인한 뒤 다시 검색해 주세요."
+            )
         raise XhsSearchError(
             "샤오홍슈 검색 결과를 읽지 못했습니다. 열린 검색 브라우저에서 페이지가 정상 표시되는지 확인한 뒤 다시 시도해 주세요."
         )
 
     def open_in_search_browser(self, url: str) -> bool:
-        if self.process is None or self.process.poll() is not None or not self.port:
+        if not self._debug_port_alive():
             return False
         self._navigate_new_tab(url)
         return True
@@ -348,3 +375,4 @@ class XiaohongshuBrowserSearch:
                 pass
         self.process = None
         self.port = None
+        self.active_target_id = None
