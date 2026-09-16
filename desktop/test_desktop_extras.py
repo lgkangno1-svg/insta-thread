@@ -5,6 +5,7 @@ from pathlib import Path
 
 from core import Asset
 from desktop_extras import (
+    collapse_redundant_thumbnails,
     improve_download_name,
     load_preferences,
     preferred_filename,
@@ -44,6 +45,26 @@ class DesktopExtrasTests(unittest.TestCase):
             Asset(id="image:2", kind="image", label="Image 3", ext="jpg"),
         ]
         self.assertEqual(primary_asset_indices(assets), [0, 1, 2])
+
+    def test_thumbnail_variants_collapse_to_highest_resolution(self):
+        assets = [
+            Asset(id="video:best", kind="video", label="Video", ext="mp4", width=1080, height=1920),
+            Asset(id="thumbnail:0", kind="thumbnail", label="Thumb 1", ext="jpg", width=480, height=480),
+            Asset(id="thumbnail:1", kind="thumbnail", label="Thumb 2", ext="jpg", width=640, height=480),
+            Asset(id="thumbnail:2", kind="thumbnail", label="Thumb 3", ext="jpg", width=320, height=320),
+        ]
+        collapsed = collapse_redundant_thumbnails(assets)
+        self.assertEqual([asset.id for asset in collapsed], ["video:best", "thumbnail:1"])
+
+    def test_thumbnail_collapse_keeps_all_real_carousel_media(self):
+        assets = [
+            Asset(id="image:0", kind="image", label="Image 1", ext="jpg", width=1080, height=1350),
+            Asset(id="image:1", kind="image", label="Image 2", ext="jpg", width=1080, height=1350),
+            Asset(id="thumbnail:0", kind="thumbnail", label="Small cover", ext="jpg", width=320, height=320),
+            Asset(id="thumbnail:1", kind="thumbnail", label="Large cover", ext="jpg", width=640, height=640),
+        ]
+        collapsed = collapse_redundant_thumbnails(assets)
+        self.assertEqual([asset.id for asset in collapsed], ["image:0", "image:1", "thumbnail:1"])
 
     def test_source_identifier(self):
         self.assertEqual(source_identifier("https://www.instagram.com/p/ABC_123/", "instagram"), "ABC_123")
