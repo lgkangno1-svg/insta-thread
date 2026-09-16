@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.1
+
+- Reworks the Windows client into a compact preview-first layout so download controls stay visible without excessive scrolling.
+- Compresses the link and save-folder controls into a small two-row input panel.
+- Moves the analyzed post text into a bounded summary panel with a separate full-text dialog.
+- Shows download choices in a two-column card grid so common Threads/Instagram posts expose up to four choices in the first viewport.
+- Adds a top-level `대표 영상 바로 다운로드` action and keeps whole-post batch download/retry actions beside it.
+- Uses an available post image/thumbnail as the visual fallback for video cards that do not expose their own preview URL.
+- Gives each card a media-specific button label such as `영상 다운로드`, `이미지 다운로드`, or `썸네일 다운로드`.
+
 ## 1.3.0
 
 - Adds one-click whole-post downloads for photo/video carousels while excluding duplicate cover thumbnails when primary media is available.
