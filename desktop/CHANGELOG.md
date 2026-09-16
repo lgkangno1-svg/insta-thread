@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.3
+
+- Gives the download system more vertical space by replacing the expanding post-body label with a fixed four-row text panel.
+- Adds an internal scrollbar for long post text so the media download cards no longer get pushed below the fold.
+- Makes post text mouse-selectable and adds `본문 전체 복사` for one-click clipboard copying.
+- Replaces the old message-box full view with a resizable scrollable text window that supports selection and copying.
+- Tightens nonessential vertical spacing so media preview cards remain the primary workspace.
+
 ## 1.3.2
 
 - Replaces the silent `.cmd` self-update handoff with a Unicode-safe hidden PowerShell updater.
