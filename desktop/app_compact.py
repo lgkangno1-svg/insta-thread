@@ -12,11 +12,12 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
     """Space-efficient desktop UI focused on preview-first downloading."""
 
     CARD_COLUMNS = 2
+    POST_PREVIEW_ROWS = 4
 
     def __init__(self) -> None:
         super().__init__()
         self.geometry("1080x720")
-        self.minsize(900, 620)
+        self.minsize(900, 600)
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=(14, 10))
@@ -43,14 +44,14 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
         )
         self.update_button.pack(side="left")
 
-        ttk.Separator(outer).pack(fill="x", pady=(8, 8))
+        ttk.Separator(outer).pack(fill="x", pady=(7, 7))
 
         top = ttk.Frame(outer)
         top.pack(fill="x")
         top.columnconfigure(0, weight=3)
         top.columnconfigure(1, weight=2)
 
-        controls = ttk.LabelFrame(top, text="빠른 입력", padding=(10, 8))
+        controls = ttk.LabelFrame(top, text="빠른 입력", padding=(10, 7))
         controls.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         controls.columnconfigure(1, weight=1)
 
@@ -83,10 +84,10 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
         )
 
         control_bottom = ttk.Frame(controls)
-        control_bottom.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        control_bottom.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(7, 0))
         control_bottom.columnconfigure(1, weight=1)
         self.analyze_button = ttk.Button(control_bottom, text="링크 분석", command=self.analyze, width=16)
-        self.analyze_button.grid(row=0, column=0, sticky="w", ipady=3)
+        self.analyze_button.grid(row=0, column=0, sticky="w", ipady=2)
         ttk.Label(control_bottom, textvariable=self.platform_var, foreground="#666666").grid(
             row=0,
             column=1,
@@ -94,31 +95,49 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
             padx=(10, 0),
         )
 
-        post = ttk.LabelFrame(top, text="게시물", padding=(10, 8))
+        post = ttk.LabelFrame(top, text="게시물 본문", padding=(8, 6))
         post.grid(row=0, column=1, sticky="nsew")
         post.columnconfigure(0, weight=1)
-        ttk.Label(post, textvariable=self.meta_var, foreground="#666666").grid(row=0, column=0, sticky="w")
-        self.post_preview_label = ttk.Label(
-            post,
-            textvariable=self.title_var,
-            font=("Segoe UI", 10, "bold"),
-            anchor="nw",
-            justify="left",
-            wraplength=360,
-            width=44,
+        post.rowconfigure(1, weight=1)
+        ttk.Label(post, textvariable=self.meta_var, foreground="#666666").grid(row=0, column=0, sticky="ew")
+
+        post_body = ttk.Frame(post)
+        post_body.grid(row=1, column=0, sticky="nsew", pady=(4, 4))
+        post_body.columnconfigure(0, weight=1)
+        post_body.rowconfigure(0, weight=1)
+        self.post_text = tk.Text(
+            post_body,
+            height=self.POST_PREVIEW_ROWS,
+            wrap="word",
+            font=("Segoe UI", 10),
+            relief="solid",
+            borderwidth=1,
+            padx=5,
+            pady=4,
+            undo=False,
+            exportselection=True,
         )
-        self.post_preview_label.grid(row=1, column=0, sticky="nsew", pady=(5, 4))
+        post_scroll = ttk.Scrollbar(post_body, orient="vertical", command=self.post_text.yview)
+        self.post_text.configure(yscrollcommand=post_scroll.set, state="disabled")
+        self.post_text.grid(row=0, column=0, sticky="nsew")
+        post_scroll.grid(row=0, column=1, sticky="ns")
+        self.post_text.bind("<Control-a>", self._select_all_post_text)
+        self.post_text.bind("<Control-A>", self._select_all_post_text)
+
         post_actions = ttk.Frame(post)
         post_actions.grid(row=2, column=0, sticky="ew")
         self.result_count_var = tk.StringVar(value="아직 분석하지 않음")
         ttk.Label(post_actions, textvariable=self.result_count_var, foreground="#666666").pack(side="left")
         ttk.Button(post_actions, text="본문 전체 보기", command=self._show_post_text).pack(side="right")
+        ttk.Button(post_actions, text="본문 전체 복사", command=self._copy_post_text).pack(side="right", padx=(0, 5))
+        self.title_var.trace_add("write", self._sync_post_preview)
+        self._sync_post_preview()
 
         status = ttk.Frame(outer)
-        status.pack(fill="x", pady=(7, 5))
-        self.progress = ttk.Progressbar(status, mode="indeterminate", length=180)
+        status.pack(fill="x", pady=(5, 4))
+        self.progress = ttk.Progressbar(status, mode="indeterminate", length=150)
         self.progress.pack(side="left", fill="x")
-        ttk.Label(status, textvariable=self.status_var, wraplength=790).pack(
+        ttk.Label(status, textvariable=self.status_var, wraplength=820).pack(
             side="left",
             fill="x",
             expand=True,
@@ -126,14 +145,14 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
         )
 
         self.quick_actions = ttk.Frame(outer)
-        self.quick_actions.pack(fill="x", pady=(0, 7))
+        self.quick_actions.pack(fill="x", pady=(0, 5))
 
         options_header = ttk.Frame(outer)
-        options_header.pack(fill="x", pady=(0, 5))
+        options_header.pack(fill="x", pady=(0, 4))
         ttk.Label(options_header, text="다운로드 옵션", font=("Segoe UI", 11, "bold")).pack(side="left")
         ttk.Label(
             options_header,
-            text="썸네일을 보고 바로 다운로드하세요. 보통 첫 화면에서 4개까지 보입니다.",
+            text="미리보기를 보고 필요한 콘텐츠를 바로 다운로드하세요.",
             foreground="#666666",
         ).pack(side="right")
 
@@ -153,7 +172,7 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
         self.cards_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         completed_row = ttk.Frame(outer)
-        completed_row.pack(fill="x", pady=(7, 0))
+        completed_row.pack(fill="x", pady=(6, 0))
         self.open_file_button = ttk.Button(
             completed_row,
             text="최근 저장 파일 열기",
@@ -172,7 +191,7 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
             outer,
             text="본인이 소유하거나 저장 권한이 있는 공개 콘텐츠만 다운로드하세요.",
             foreground="#777777",
-        ).pack(anchor="w", pady=(6, 0))
+        ).pack(anchor="w", pady=(5, 0))
 
     def _install_batch_controls(self) -> None:
         self.quick_download_button = ttk.Button(
@@ -199,13 +218,71 @@ class CompactDownloaderApp(EnhancedDownloaderApp):
         )
         self.retry_failed_button.pack(side="left", fill="x", expand=True, padx=(7, 0))
 
+    def _sync_post_preview(self, *_args: object) -> None:
+        widget = getattr(self, "post_text", None)
+        if widget is None:
+            return
+        body = self.title_var.get().strip()
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        if body:
+            widget.insert("1.0", body)
+        widget.configure(state="disabled")
+        widget.yview_moveto(0.0)
+
+    def _select_all_post_text(self, event: tk.Event | None = None) -> str:
+        widget = event.widget if event is not None else getattr(self, "post_text", None)
+        if isinstance(widget, tk.Text):
+            widget.tag_add("sel", "1.0", "end-1c")
+            widget.mark_set("insert", "1.0")
+            widget.see("1.0")
+        return "break"
+
+    def _copy_post_text(self) -> None:
+        text = self.title_var.get().strip()
+        if not text:
+            messagebox.showinfo("본문 복사", "분석된 게시물 본문이 없습니다.")
+            return
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update_idletasks()
+        self.status_var.set("게시물 본문 전체를 클립보드에 복사했습니다.")
+
     def _show_post_text(self) -> None:
         text = self.title_var.get().strip()
         meta = self.meta_var.get().strip()
         if not text:
             messagebox.showinfo("게시물 본문", "분석된 게시물 본문이 없습니다.")
             return
-        messagebox.showinfo("게시물 본문", f"{meta}\n\n{text}" if meta else text)
+
+        window = tk.Toplevel(self)
+        window.title("게시물 본문")
+        window.geometry("680x520")
+        window.minsize(480, 320)
+        window.transient(self)
+
+        outer = ttk.Frame(window, padding=10)
+        outer.pack(fill="both", expand=True)
+        if meta:
+            ttk.Label(outer, text=meta, foreground="#666666").pack(anchor="w", pady=(0, 6))
+
+        body_frame = ttk.Frame(outer)
+        body_frame.pack(fill="both", expand=True)
+        full_text = tk.Text(body_frame, wrap="word", font=("Segoe UI", 10), padx=8, pady=8)
+        full_scroll = ttk.Scrollbar(body_frame, orient="vertical", command=full_text.yview)
+        full_text.configure(yscrollcommand=full_scroll.set)
+        full_text.pack(side="left", fill="both", expand=True)
+        full_scroll.pack(side="right", fill="y")
+        full_text.insert("1.0", text)
+        full_text.configure(state="disabled")
+        full_text.bind("<Control-a>", self._select_all_post_text)
+        full_text.bind("<Control-A>", self._select_all_post_text)
+
+        actions = ttk.Frame(outer)
+        actions.pack(fill="x", pady=(8, 0))
+        ttk.Button(actions, text="전체 복사", command=self._copy_post_text).pack(side="right")
+        ttk.Button(actions, text="닫기", command=window.destroy).pack(side="right", padx=(0, 6))
+        window.focus_set()
 
     def _download_primary(self) -> None:
         if self.busy or not self.assets:

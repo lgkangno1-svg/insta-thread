@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = (Resolve-Path desktop).Path
-          python -m unittest desktop/test_core.py desktop/test_instagram_fallback.py desktop/test_desktop_extras.py desktop/test_windows_updater.py -v
+          python -m unittest desktop/test_core.py desktop/test_instagram_fallback.py desktop/test_desktop_extras.py desktop/test_windows_updater.py desktop/test_compact_post_panel.py -v
           python -m py_compile desktop/core.py desktop/app.py desktop/app_enhanced.py desktop/app_compact.py desktop/desktop_extras.py desktop/instagram_fallback.py desktop/instagram_runtime_hook.py desktop/windows_updater.py desktop/make_windows_resources.py
 
       - name: Generate Windows icon and version resources
@@ -114,4 +114,4 @@ jobs:
             release/AVOCADOSS-Downloader.exe.sha256 \
             --target "$GITHUB_SHA" \
             --title "AVOCADOSS Downloader v${version}" \
-            --notes "Compact preview-first Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Includes media preview cards, whole-post batch download, readable filenames, public-Instagram fallback, and a hardened Unicode-safe self-updater with replacement retries, post-copy SHA-256 verification, and local failure logging."
+            --notes "Preview-first Windows downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote links. Long post text now stays inside a fixed-height scrollable selectable panel with one-click full-copy and a resizable full-text viewer, preserving more screen space for media preview cards and download controls. Includes whole-post batch download, readable filenames, public-Instagram fallback, and the hardened SHA-256 verified self-updater."
