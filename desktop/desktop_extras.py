@@ -69,6 +69,31 @@ def primary_asset_indices(assets: list[Asset]) -> list[int]:
     return primary or list(range(len(assets)))
 
 
+def collapse_redundant_thumbnails(assets: list[Asset]) -> list[Asset]:
+    """Keep all real media but expose only the best thumbnail variant.
+
+    Platforms commonly return several cover/thumbnail sizes for the same frame.
+    Showing every size as a separate download choice adds clutter, so the desktop
+    client keeps the highest-resolution thumbnail (filesize as a tie-breaker).
+    """
+    thumbnail_indices = [index for index, asset in enumerate(assets) if asset.kind == "thumbnail"]
+    if len(thumbnail_indices) <= 1:
+        return list(assets)
+
+    def score(index: int) -> tuple[int, int, int]:
+        asset = assets[index]
+        area = (asset.width or 0) * (asset.height or 0)
+        filesize = asset.filesize or 0
+        return (area, filesize, -index)
+
+    best_index = max(thumbnail_indices, key=score)
+    return [
+        asset
+        for index, asset in enumerate(assets)
+        if asset.kind != "thumbnail" or index == best_index
+    ]
+
+
 def _component(value: str, limit: int = 48) -> str:
     cleaned = _SAFE_COMPONENT.sub("-", value.strip().lstrip("@")).strip("-._")
     return cleaned[:limit].strip("-._")
