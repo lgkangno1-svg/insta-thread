@@ -188,24 +188,19 @@
       let transientFailures = 0;
       while (Date.now() - pollStarted < 12 * 60 * 1000) {
         await sleep(1500);
-        let statusRes;
+        let job;
         try {
-          statusRes = await fetch(`/api/v1/jobs/${created.id}`, {cache: 'no-store'});
-        } catch (_) {
+          ({data: job} = await requestJson(`/api/v1/jobs/${created.id}`, {
+            cache: 'no-store'
+          }, {timeoutMs: 15000, retries: 0}));
+          transientFailures = 0;
+        } catch (error) {
+          if (error.status && !transientStatuses.has(error.status)) throw error;
           transientFailures += 1;
           if (transientFailures <= 8) continue;
           throw new Error('Network connection was interrupted while preparing the download.');
         }
 
-        if (transientStatuses.has(statusRes.status)) {
-          transientFailures += 1;
-          if (transientFailures <= 8) continue;
-        } else {
-          transientFailures = 0;
-        }
-
-        const job = await parseJson(statusRes);
-        if (!statusRes.ok) throw new Error(job.detail || 'Download job is no longer available');
         if (job.status === 'error') throw new Error(job.error || 'Download preparation failed');
         if (job.status === 'ready') {
           track('download_ready');
@@ -271,6 +266,7 @@
       dl.className = 'download';
       dl.type = 'button';
       dl.textContent = 'Download';
+      dl.setAttribute('aria-label', `Download ${item.label || kindLabel(item.kind)}`);
       dl.addEventListener('click', () => startDownload(url, item.id, data.analysis_token, gate, dl));
       row.appendChild(dl);
       assets.appendChild(row);
