@@ -92,7 +92,6 @@ jobs:
           set -euo pipefail
           mkdir -p qa
           TARGET='https://download.avocadoss.co.kr'
-          EXPECTED_TITLE='All-in-One Social Media Downloader | YouTube, Instagram, Threads, Douyin & Xiaohongshu'
           EXPECTED_SHA="$(cat qa/expected-sha.txt)"
           LIVE_SHA="$(cat qa/live-sha.txt)"
           {
@@ -110,11 +109,12 @@ jobs:
           agent-browser errors > qa/errors-initial.txt 2>&1 || true
           agent-browser network requests > qa/network-initial.txt 2>&1 || true
 
-          # Fail closed: stale deployment, Cloudflare error pages, or a missing
-          # design layer must never count as a passing browser check.
+          # Fail closed on stale deployment, error pages, missing core UI or a missing
+          # design layer. Keep the title assertion semantic so ordinary SEO copy edits
+          # do not make an otherwise healthy production build fail QA.
           [[ "$LIVE_SHA" == "$EXPECTED_SHA" ]]
           grep -Fxq 'https://download.avocadoss.co.kr/' qa/url.txt
-          grep -Fxq "$EXPECTED_TITLE" qa/title.txt
+          grep -Fqi 'Social Media Downloader' qa/title.txt
           ! grep -Eqi 'Cloudflare Tunnel error|Error 1033|Bad gateway|Internal Server Error' qa/title.txt qa/snapshot-initial.txt
           grep -Fq 'textbox "Public social media URL"' qa/snapshot-initial.txt
           grep -Fq 'button "Analyze link"' qa/snapshot-initial.txt
