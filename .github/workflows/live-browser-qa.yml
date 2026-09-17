@@ -152,21 +152,23 @@ jobs:
           check_platform_markup douyin '/douyin-downloader' douyin
           check_platform_markup xiaohongshu '/xiaohongshu-downloader' xiaohongshu
 
+          # Alias checks only own redirect routing and availability. Platform-page
+          # identity is already verified above, so duplicating mutable SEO titles here
+          # creates brittle false failures without adding coverage.
           check_alias() {
-            local key="$1" alias="$2" path="$3" title_fragment="$4"
+            local key="$1" alias="$2" path="$3"
             agent-browser open "$alias" > "qa/${key}-open.txt" 2>&1
             agent-browser wait --load domcontentloaded >/dev/null 2>&1
             agent-browser get url > "qa/${key}-url.txt"
             agent-browser get title > "qa/${key}-title.txt"
             grep -Fxq "https://download.avocadoss.co.kr${path}" "qa/${key}-url.txt"
-            grep -Fqi "$title_fragment" "qa/${key}-title.txt"
-            ! grep -Eqi 'Cloudflare Tunnel error|Error 1033|Bad gateway' "qa/${key}-title.txt"
+            ! grep -Eqi 'Cloudflare Tunnel error|Error 1033|Bad gateway|Internal Server Error' "qa/${key}-title.txt"
           }
-          check_alias youtube 'https://youtube.avocadoss.co.kr' '/youtube-downloader' 'YouTube Video Downloader'
-          check_alias insta 'https://insta.avocadoss.co.kr' '/instagram-reels-downloader' 'Instagram Reels'
-          check_alias thread 'https://thread.avocadoss.co.kr' '/threads-downloader' 'Threads Video & Image Downloader'
-          check_alias douyin 'https://douyin.avocadoss.co.kr' '/douyin-downloader' 'Douyin Video & Cover Downloader'
-          check_alias xiaohongshu 'https://xiaohongshu.avocadoss.co.kr' '/xiaohongshu-downloader' 'Xiaohongshu Video & Image Downloader'
+          check_alias youtube 'https://youtube.avocadoss.co.kr' '/youtube-downloader'
+          check_alias insta 'https://insta.avocadoss.co.kr' '/instagram-reels-downloader'
+          check_alias thread 'https://thread.avocadoss.co.kr' '/threads-downloader'
+          check_alias douyin 'https://douyin.avocadoss.co.kr' '/douyin-downloader'
+          check_alias xiaohongshu 'https://xiaohongshu.avocadoss.co.kr' '/xiaohongshu-downloader'
 
           agent-browser close >/dev/null 2>&1 || true
           echo '=== URL ===' >> qa/summary.txt
