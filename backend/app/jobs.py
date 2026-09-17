@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import threading
@@ -16,6 +17,23 @@ from .security import verify_analysis_token
 from .services import downloader
 
 
+logger = logging.getLogger(__name__)
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
 @dataclass
 class Job:
     id: str
@@ -30,22 +48,15 @@ class Job:
 
 class JobStore:
     def __init__(self) -> None:
-        workers = max(1, min(int(os.getenv("DOWNLOAD_WORKERS", "2")), 4))
+        workers = max(1, min(_env_int("DOWNLOAD_WORKERS", 2), 4))
         self.executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="media-job")
         self.jobs: dict[str, Job] = {}
         self.lock = threading.Lock()
-        self.ttl = max(300, int(os.getenv("JOB_TTL_SECONDS", "1800")))
-        self.ready_ttl = max(60, min(int(os.getenv("READY_JOB_TTL_SECONDS", "600")), self.ttl))
-        self.error_ttl = max(30, min(int(os.getenv("ERROR_JOB_TTL_SECONDS", "120")), self.ttl))
-        try:
-            max_jobs = int(os.getenv("MAX_JOBS", "100"))
-        except ValueError:
-            max_jobs = 100
-        self.max_jobs = max(10, min(max_jobs, 500))
-        try:
-            min_free_gb = float(os.getenv("MIN_FREE_GB", "5"))
-        except ValueError:
-            min_free_gb = 5.0
+        self.ttl = max(300, _env_int("JOB_TTL_SECONDS", 1800))
+        self.ready_ttl = max(60, min(_env_int("READY_JOB_TTL_SECONDS", 600), self.ttl))
+        self.error_ttl = max(30, min(_env_int("ERROR_JOB_TTL_SECONDS", 120), self.ttl))
+        self.max_jobs = max(10, min(_env_int("MAX_JOBS", 100), 500))
+        min_free_gb = _env_float("MIN_FREE_GB", 5.0)
         self.min_free_bytes = int(max(1.0, min(min_free_gb, 100.0)) * 1024**3)
         self.tmp_root = os.getenv("MEDIA_TMP_DIR") or None
         if self.tmp_root:
@@ -58,7 +69,7 @@ class JobStore:
             try:
                 self.cleanup()
             except Exception:
-                pass
+                logger.exception("Background job cleanup failed")
 
     def _job_ttl(self, job: Job) -> int:
         if job.status == "ready":
@@ -121,12 +132,20 @@ class JobStore:
                 current.tmpdir = tmpdir
                 current.status = "ready"
                 current.updated_at = time.time()
-        except Exception as exc:
-            detail = getattr(exc, "detail", None) or str(exc)
+        except HTTPException as exc:
+            detail = str(exc.detail)[:1000]
             with self.lock:
                 current = self.jobs.get(job_id)
                 if current:
-                    current.error = str(detail)[:1000]
+                    current.error = detail
+                    current.status = "error"
+                    current.updated_at = time.time()
+        except Exception:
+            logger.exception("Unexpected download job failure", extra={"job_id": job_id})
+            with self.lock:
+                current = self.jobs.get(job_id)
+                if current:
+                    current.error = "Download preparation failed"
                     current.status = "error"
                     current.updated_at = time.time()
 

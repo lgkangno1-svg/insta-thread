@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -70,7 +70,13 @@ app.add_middleware(
 # Nginx applies the same limits in the Docker deployment. Keep an application-level
 # ceiling as well so the rootless host fallback is not an unthrottled public API.
 _rate_lock = threading.Lock()
-_rate_windows: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+_rate_windows: dict[tuple[str, str], deque[float]] = {}
+_RATE_WINDOW_SECONDS = 60.0
+try:
+    _RATE_BUCKETS_MAX = int(os.getenv("RATE_LIMIT_BUCKETS_MAX", "4096"))
+except ValueError:
+    _RATE_BUCKETS_MAX = 4096
+_RATE_BUCKETS_MAX = max(256, min(_RATE_BUCKETS_MAX, 65536))
 
 
 def _rate_class(request: Request) -> tuple[str, int] | None:
@@ -84,6 +90,31 @@ def _rate_class(request: Request) -> tuple[str, int] | None:
     if request.method == "GET" and path.startswith("/api/v1/jobs/") and not path.endswith("/file"):
         return "poll", 120
     return None
+
+
+def _reserve_rate_slot(bucket: str, ip: str, limit: int, *, now: float | None = None) -> bool:
+    timestamp = time.monotonic() if now is None else now
+    cutoff = timestamp - _RATE_WINDOW_SECONDS
+    key = (bucket, ip[:128])
+
+    with _rate_lock:
+        window = _rate_windows.get(key)
+        if window is None and len(_rate_windows) >= _RATE_BUCKETS_MAX:
+            for stale_key, stale_window in list(_rate_windows.items()):
+                while stale_window and stale_window[0] <= cutoff:
+                    stale_window.popleft()
+                if not stale_window:
+                    _rate_windows.pop(stale_key, None)
+            if len(_rate_windows) >= _RATE_BUCKETS_MAX:
+                return False
+
+        window = _rate_windows.setdefault(key, deque())
+        while window and window[0] <= cutoff:
+            window.popleft()
+        if len(window) >= limit:
+            return False
+        window.append(timestamp)
+        return True
 
 
 def _apply_security_headers(request: Request, response: Response) -> Response:
@@ -171,20 +202,13 @@ async def production_guards(request: Request, call_next):
         if classified:
             bucket, limit = classified
             ip = (request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "unknown")).strip()
-            now = time.monotonic()
-            key = (bucket, ip[:128])
-            with _rate_lock:
-                window = _rate_windows[key]
-                while window and window[0] <= now - 60:
-                    window.popleft()
-                if len(window) >= limit:
-                    limited = JSONResponse(
-                        {"detail": "Rate limit exceeded"},
-                        status_code=429,
-                        headers={"Retry-After": "60"},
-                    )
-                    return _apply_security_headers(request, limited)
-                window.append(now)
+            if not _reserve_rate_slot(bucket, ip, limit):
+                limited = JSONResponse(
+                    {"detail": "Rate limit exceeded"},
+                    status_code=429,
+                    headers={"Retry-After": "60"},
+                )
+                return _apply_security_headers(request, limited)
 
     response = await call_next(request)
     return _apply_security_headers(request, response)
