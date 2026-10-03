@@ -140,12 +140,12 @@ class JobStore:
                     current.error = detail
                     current.status = "error"
                     current.updated_at = time.time()
-        except Exception:
+        except Exception as exc:
             logger.exception("Unexpected download job failure", extra={"job_id": job_id})
             with self.lock:
                 current = self.jobs.get(job_id)
                 if current:
-                    current.error = "Download preparation failed"
+                    current.error = f"Download preparation failed ({type(exc).__name__})"
                     current.status = "error"
                     current.updated_at = time.time()
 

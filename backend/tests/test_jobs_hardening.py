@@ -26,7 +26,7 @@ def test_unexpected_job_failure_does_not_leak_internal_error(monkeypatch):
         store._run(job.id)
         failed = store.get(job.id)
         assert failed.status == "error"
-        assert failed.error == "Download preparation failed"
+        assert failed.error == "Download preparation failed (RuntimeError)"
         assert "/tmp/private-token" not in failed.error
     finally:
         store.consume(job.id)

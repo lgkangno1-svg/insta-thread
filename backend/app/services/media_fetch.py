@@ -15,6 +15,17 @@ from fastapi import HTTPException
 _ALLOWED_SCHEMES = {"http", "https"}
 
 
+def _content_length(value: str | None) -> int:
+    """Parse Content-Length defensively; some CDNs/proxies return malformed values."""
+    if not value:
+        return 0
+    try:
+        parsed = int(value.strip())
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed > 0 else 0
+
+
 def cleanup_dir(path: str) -> None:
     shutil.rmtree(path, ignore_errors=True)
 
@@ -85,10 +96,19 @@ def prepare_resolved_media(
     max_bytes = max_size_mb * 1024 * 1024
 
     try:
-        with httpx.Client(timeout=60, follow_redirects=False, headers={"User-Agent": "Mozilla/5.0"}) as client:
+        with httpx.Client(
+            timeout=httpx.Timeout(60.0, connect=20.0),
+            follow_redirects=False,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "identity",
+            },
+        ) as client:
             response = _open_public_stream(client, source_url, referer=referer)
             try:
-                length = int(response.headers.get("content-length") or 0)
+                length = _content_length(response.headers.get("content-length"))
                 if length and length > max_bytes:
                     raise HTTPException(status_code=413, detail="Asset exceeds server file-size limit")
                 total = 0
@@ -103,9 +123,12 @@ def prepare_resolved_media(
     except HTTPException:
         cleanup_dir(tmpdir)
         raise
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, OSError, ValueError) as exc:
         cleanup_dir(tmpdir)
-        raise HTTPException(status_code=422, detail=f"Could not fetch resolved media: {exc}") from exc
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not fetch resolved media ({type(exc).__name__})",
+        ) from exc
 
     return path, tmpdir
 
@@ -140,7 +163,7 @@ def prepare_resolved_archive(
                     safe_ext = re.sub(r"[^a-zA-Z0-9]", "", ext or "bin")[:8] or "bin"
                     response = _open_public_stream(client, source_url, referer=referer)
                     try:
-                        length = int(response.headers.get("content-length") or 0)
+                        length = _content_length(response.headers.get("content-length"))
                         if length and total + length > max_bytes:
                             raise HTTPException(status_code=413, detail="Archive exceeds server file-size limit")
                         member_name = f"image_{idx:02d}.{safe_ext}"
