@@ -1,38 +1,44 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Social Media Downloader | YouTube, Instagram, Threads, Douyin & Xiaohongshu</title>
-  <meta name="description" content="Paste a public YouTube, Instagram, Threads, Douyin or Xiaohongshu URL. AVOCADOSS detects the platform, previews available media, and lets you download the file you need.">
+  <title>유튜브·인스타그램·쓰레드 다운로더 | SNS 영상 다운로드 | AVOCADOSS</title>
+  <meta name="description" content="유튜브 다운로더, 인스타그램 다운로더, 쓰레드 다운로더를 한곳에서 이용하세요. 공개 영상·쇼츠·릴스·이미지 링크를 붙여넣고 가능한 파일을 확인해 저장하는 온라인 도구입니다.">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="theme-color" content="#0d141d">
   <link rel="canonical" href="https://download.avocadoss.co.kr/">
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/styles.css?v=20260909c">
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="ko_KR">
   <meta property="og:site_name" content="AVOCADOSS Download">
-  <meta property="og:title" content="All-in-One Social Media Downloader | AVOCADOSS">
-  <meta property="og:description" content="One input automatically detects YouTube, Instagram, Threads, Douyin and Xiaohongshu public links.">
+  <meta property="og:title" content="유튜브·인스타그램·쓰레드 다운로더 | AVOCADOSS">
+  <meta property="og:description" content="공개 유튜브 영상·쇼츠, 인스타그램 릴스, 쓰레드 영상·이미지를 한곳에서 분석하고 저장할 수 있습니다.">
   <meta property="og:url" content="https://download.avocadoss.co.kr/">
-  <meta name="twitter:card" content="summary">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://download.avocadoss.co.kr/#website","url":"https://download.avocadoss.co.kr/","name":"AVOCADOSS Download","alternateName":["AVOCADOSS","AVOCADOSS Downloader"],"description":"Unified public-media downloader for supported social platforms","inLanguage":["en","ko"]},{"@type":"WebApplication","@id":"https://download.avocadoss.co.kr/#app","name":"AVOCADOSS Social Media Downloader","url":"https://download.avocadoss.co.kr/","applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires a modern web browser","description":"Analyze a supported public YouTube, Instagram, Threads, Douyin or Xiaohongshu URL and download available media files.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"isAccessibleForFree":true},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Do I need to choose the platform before pasting a link?","acceptedAnswer":{"@type":"Answer","text":"No. Paste a supported public URL into the single input. The server detects YouTube, Instagram, Threads, Douyin or Xiaohongshu automatically."}},{"@type":"Question","name":"주소는 어디에 붙여넣나요?","acceptedAnswer":{"@type":"Answer","text":"사이트 첫 화면의 큰 URL 입력칸에 YouTube, Instagram, Threads, Douyin 또는 Xiaohongshu의 공개 게시물 주소를 붙여넣고 Analyze link 버튼을 누르면 됩니다."}},{"@type":"Question","name":"Does AVOCADOSS support private posts or DRM-protected media?","acceptedAnswer":{"@type":"Answer","text":"No. The service is limited to media that is publicly accessible and does not bypass private-account restrictions, paywalls, DRM or other access controls."}},{"@type":"Question","name":"Are downloaded files stored permanently?","acceptedAnswer":{"@type":"Answer","text":"No permanent user media library is provided. Files that require server-side preparation are temporary and are removed after delivery."}}]}]}</script>
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://download.avocadoss.co.kr/#website","url":"https://download.avocadoss.co.kr/","name":"AVOCADOSS SNS 다운로더","alternateName":["AVOCADOSS Download","AVOCADOSS Downloader"],"description":"유튜브, 인스타그램, 쓰레드, 더우인, 샤오홍슈의 공개 링크에서 제공되는 영상과 이미지를 선택할 수 있는 웹 도구.","inLanguage":["ko","en"]},{"@type":"WebApplication","@id":"https://download.avocadoss.co.kr/#app","name":"유튜브·인스타그램·쓰레드 다운로더 | AVOCADOSS","url":"https://download.avocadoss.co.kr/","applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires a modern web browser","description":"공개 유튜브 영상과 쇼츠, 인스타그램 릴스와 게시물, 쓰레드 영상과 이미지를 URL 입력으로 분석하고 이용 가능한 미디어를 선택하는 온라인 다운로더.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"isAccessibleForFree":true,"alternateName":["유튜브 다운로더","인스타그램 다운로더","쓰레드 다운로더","스레드 다운로더"],"inLanguage":["ko","en"],"isPartOf":{"@id":"https://download.avocadoss.co.kr/#website"},"featureList":["유튜브 공개 영상·쇼츠 링크 분석","인스타그램 공개 릴스 영상 및 썸네일 선택","쓰레드 공개 게시물의 영상·이미지 선택","지원 플랫폼 자동 감지"]},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"주소는 어디에 붙여넣으면 되나요?","acceptedAnswer":{"@type":"Answer","text":"페이지 맨 위의 큰 URL 입력칸에 붙여넣으면 됩니다. 플랫폼을 고를 필요 없이 주소만 넣고 Analyze link를 누르면 자동 감지됩니다."}},{"@type":"Question","name":"SNS 종류를 먼저 선택해야 하나요?","acceptedAnswer":{"@type":"Answer","text":"아니요. 링크를 붙여넣으면 자동 감지합니다. 아래의 플랫폼 이름은 상태 표시이며 직접 선택할 필요는 없습니다."}},{"@type":"Question","name":"공개 링크인데도 다운로드가 안 되는 이유는?","acceptedAnswer":{"@type":"Answer","text":"원본 삭제, 지역 제한, 로그인 요구, 공유 주소 만료 또는 플랫폼 구조 변경 때문일 수 있습니다. 접근 제한은 우회하지 않습니다."}},{"@type":"Question","name":"다운로드 파일을 서버에 보관하나요?","acceptedAnswer":{"@type":"Answer","text":"개인용 영구 보관함을 제공하지 않습니다. 전달을 위해 생성된 임시 파일은 처리 수명주기에 따라 삭제됩니다."}},{"@type":"Question","name":"다른 사람의 저작권 있는 영상을 저장해도 되나요?","acceptedAnswer":{"@type":"Answer","text":"직접 소유하거나 적법하게 저장할 권한이 있는 콘텐츠에만 사용하세요. 각 플랫폼의 상표는 해당 권리자에게 있습니다."}},{"@type":"Question","name":"광고를 클릭해야 다운로드할 수 있나요?","acceptedAnswer":{"@type":"Answer","text":"아니요. 광고가 있더라도 다운로드와 분리되어 있으며 광고 클릭을 요구하지 않습니다."}},{"@type":"Question","name":"유튜브 다운로더와 인스타그램 다운로더를 따로 설치해야 하나요?","acceptedAnswer":{"@type":"Answer","text":"아니요. AVOCADOSS는 웹브라우저에서 사용하는 도구이며, 유튜브 다운로드, 인스타그램 릴스 저장, 쓰레드 다운로드를 같은 입력창에서 처리합니다. 공개적으로 접근 가능한 링크만 지원합니다."}},{"@type":"Question","name":"쓰레드 영상과 사진을 둘 다 다운로드할 수 있나요?","acceptedAnswer":{"@type":"Answer","text":"공개 Threads 게시물이 영상이나 이미지를 제공하면 분석 결과에 해당 미디어가 따로 표시됩니다. 게시물 삭제나 접근 제한이 있는 경우에는 이용할 수 없습니다."}}]}]}</script>
+<link rel="stylesheet" href="/polish.css?v=20261017a">
+<meta property="og:image" content="https://download.avocadoss.co.kr/og-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="AVOCADOSS 공개 SNS 영상 다운로더 안내">
 </head>
 <body data-platform="">
 <header class="site-header">
   <div class="wrap nav">
     <a class="brand" href="/" aria-label="AVOCADOSS Download home"><span class="brand-mark">A</span><span>AVOCADO<span>SS</span></span></a>
-    <nav class="nav-links" aria-label="Primary navigation"><a href="#how-it-works">How it works</a><a href="#platform-guides">Platform guides</a><a href="/faq">FAQ</a></nav>
-    <div class="engine"><span class="engine-dot"></span><span>Engine online</span></div>
+    <nav class="nav-links" aria-label="Primary navigation"><a href="#how-it-works">이용 방법</a><a href="#platform-guides">서비스별 다운로더</a><a href="/faq">FAQ</a></nav>
+    <div class="engine"><span class="engine-dot"></span><span>공개 링크 지원</span></div>
   </div>
 </header>
 <main>
   <section class="hero">
     <div class="wrap">
       <div class="hero-copy">
-        <div class="eyebrow"><span class="eyebrow-dot"></span>One input · automatic platform detection</div>
-        <h1>Paste any supported social link. We’ll detect the platform.</h1>
-        <p>Use one downloader for public YouTube, Instagram, Threads, Douyin and Xiaohongshu links. Analyze the URL, preview the available media, and save only the file you need.</p>
+        <div class="eyebrow"><span class="eyebrow-dot"></span>링크 하나로 자동 플랫폼 감지</div>
+        <h1>유튜브·인스타그램·쓰레드 다운로더</h1>
+        <p>유튜브 영상·쇼츠, 인스타그램 릴스, 쓰레드 영상·사진까지 한곳에서 다운로드하세요. 공개 게시물의 공유 링크를 붙여넣으면 저장 가능한 파일을 보여줍니다.</p>
       </div>
 
       <div class="tool">
@@ -40,11 +46,11 @@
           <div class="input-shell">
             <div class="input-box">
               <span class="input-icon" aria-hidden="true">↗</span>
-              <input class="url-input" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="여기에 영상/게시물 주소를 붙여넣으세요 · Paste social-media URL" aria-label="Public social media URL" required>
-              <button class="utility-btn" data-clear type="button">Clear</button>
-              <button class="utility-btn" data-paste type="button">Paste</button>
+              <input class="url-input" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="SNS 영상·게시물 공유 링크를 붙여넣으세요" aria-label="공개 SNS 영상 또는 게시물 주소" required>
+              <button class="utility-btn" data-clear type="button">지우기</button>
+              <button class="utility-btn" data-paste type="button">붙여넣기</button>
             </div>
-            <button class="btn" type="submit">Analyze link</button>
+            <button class="btn" type="submit">링크 분석하기</button>
           </div>
           <div class="auto-row">
             <div class="detected" data-detected>Paste any supported public link — platform selection is automatic.</div>
@@ -57,7 +63,13 @@
             </div>
           </div>
         </form>
-        <div class="notice" lang="ko"><strong>사용 방법:</strong> YouTube·Instagram·Threads·Douyin·샤오홍슈에서 원하는 공개 영상/게시물의 <strong>공유 주소를 복사</strong>한 뒤, 바로 위의 큰 입력칸에 <strong>주소를 붙여넣고 Analyze link(분석하기)</strong>를 누르세요. 사이트가 플랫폼을 자동으로 감지하며, 결과가 나오면 원하는 영상·이미지·썸네일 옆의 Download 버튼을 누르면 됩니다.</div>
+        <div class="notice" lang="ko" aria-label="간단한 사용법">
+          <div class="quick-start"><span class="quick-start-title">사용 방법</span>
+            <span class="quick-start-step">① 공유 링크 복사</span><span class="quick-start-arrow" aria-hidden="true">→</span>
+            <span class="quick-start-step">② 주소 붙여넣기</span><span class="quick-start-arrow" aria-hidden="true">→</span>
+            <span class="quick-start-step">③ 영상·사진 선택</span>
+          </div>
+        </div>
         <div class="status" data-status role="status" aria-live="polite"></div>
         <div class="ad-slot" data-ad-slot="leaderboard"></div>
       </div>
@@ -80,9 +92,22 @@
     </div>
   </section>
 
+  <section class="section" id="popular-downloaders">
+    <div class="wrap">
+      <div class="section-head"><h2>플랫폼별 무료 온라인 다운로더</h2><p class="lead">필요한 플랫폼을 골라 자세한 사용법과 지원 범위를 확인하세요. 별도 프로그램 설치는 필요하지 않습니다.</p></div>
+      <div class="platform-guide-grid">
+        <a class="platform-guide" href="/youtube-downloader">유튜브 다운로더 · 쇼츠 저장</a>
+        <a class="platform-guide" href="/instagram-reels-downloader">인스타그램 다운로더 · 릴스 저장</a>
+        <a class="platform-guide" href="/threads-downloader">쓰레드 다운로더 · 영상·사진</a>
+        <a class="platform-guide" href="/douyin-downloader">더우인 동영상 다운로드</a>
+        <a class="platform-guide" href="/xiaohongshu-downloader">샤오홍슈 영상·이미지 저장</a>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="how-it-works">
     <div class="wrap">
-      <div class="section-head"><h2>One workflow for every supported platform</h2><p class="lead">The platform-specific pages are useful guides for search and troubleshooting, but you never have to pick a tab before downloading.</p></div>
+      <div class="section-head"><h2>온라인 동영상 다운로드 방법</h2><p class="lead">설치 없이 공유 링크를 복사해 붙여넣고, 표시되는 영상이나 이미지 중 원하는 파일을 선택하세요. 지원 여부와 화질은 원본 공개 상태에 따라 달라집니다.</p></div>
       <div class="steps">
         <div class="step"><b>Copy a public post URL</b><span>Use the share link or the page URL from the source platform.</span></div>
         <div class="step"><b>Paste once and analyze</b><span>AVOCADOSS detects the platform and reads the media options exposed by the public page.</span></div>
@@ -93,7 +118,7 @@
 
   <section class="section" id="platform-guides">
     <div class="wrap">
-      <div class="section-head"><h2>Supported platforms and link types</h2><p class="lead">These platform guides explain supported URL patterns, device steps and common failure cases. The main downloader above accepts all of them.</p></div>
+      <div class="section-head"><h2>유튜브·인스타그램·쓰레드 다운로드 안내</h2><p class="lead">플랫폼별 지원 링크 형식, 영상 저장 방법, 오류 해결 방법을 확인할 수 있습니다. 모든 링크는 상단 입력창에서 자동으로 감지합니다.</p></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Platform</th><th>Common public links</th><th>Current media support</th><th>Guide</th></tr></thead>
         <tbody>
@@ -121,14 +146,16 @@
 
   <section class="section">
     <div class="wrap faq">
-      <div class="section-head"><h2>Frequently asked questions</h2><p class="lead">Direct answers to the questions that matter before you paste a link.</p></div>
+      <div class="section-head"><h2>동영상 다운로더 자주 묻는 질문</h2><p class="lead">유튜브, 인스타그램, 쓰레드의 공개 링크를 저장하기 전에 알아둘 내용을 정리했습니다.</p></div>
       <details open><summary>주소는 어디에 붙여넣으면 되나요?</summary><p lang="ko">페이지 맨 위의 큰 URL 입력칸에 붙여넣으면 됩니다. 플랫폼을 고를 필요 없이 주소만 넣고 Analyze link를 누르면 자동 감지됩니다.</p></details>
-      <details><summary>Do I have to choose YouTube, Instagram, Threads, Douyin or Xiaohongshu first?</summary><p>No. The URL is detected automatically. The platform labels under the input are status indicators, not tabs you need to navigate.</p></details>
-      <details><summary>Why can a public link still fail?</summary><p>The post may have been deleted, region-restricted, login-gated, rate-limited, or changed by the source platform. Short share links can also expire. AVOCADOSS does not bypass access controls.</p></details>
-      <details><summary>Does the site keep a permanent history of my downloaded media?</summary><p>No permanent media library is part of the downloader. Files generated for delivery are temporary and are removed after the response lifecycle.</p></details>
-      <details><summary>Can I use the downloader for copyrighted media?</summary><p>Use it only where you own the media, have permission or a license, or otherwise have a lawful right to save it. Source-platform names and trademarks belong to their respective owners.</p></details>
-      <details><summary>Is clicking an advertisement required to download?</summary><p>No. Advertising, when enabled, is separate from the download action. AVOCADOSS does not require an ad click to unlock a file.</p></details>
-      <div class="freshness">Technical guide reviewed: September 2026</div>
+      <details><summary>SNS 종류를 먼저 선택해야 하나요?</summary><p>아니요. 링크를 붙여넣으면 자동 감지합니다. 아래의 플랫폼 이름은 상태 표시이며 직접 선택할 필요는 없습니다.</p></details>
+      <details><summary>공개 링크인데도 다운로드가 안 되는 이유는?</summary><p>원본 삭제, 지역 제한, 로그인 요구, 공유 주소 만료 또는 플랫폼 구조 변경 때문일 수 있습니다. 접근 제한은 우회하지 않습니다.</p></details>
+      <details><summary>다운로드 파일을 서버에 보관하나요?</summary><p>개인용 영구 보관함을 제공하지 않습니다. 전달을 위해 생성된 임시 파일은 처리 수명주기에 따라 삭제됩니다.</p></details>
+      <details><summary>다른 사람의 저작권 있는 영상을 저장해도 되나요?</summary><p>직접 소유하거나 적법하게 저장할 권한이 있는 콘텐츠에만 사용하세요. 각 플랫폼의 상표는 해당 권리자에게 있습니다.</p></details>
+      <details><summary>광고를 클릭해야 다운로드할 수 있나요?</summary><p>아니요. 광고가 있더라도 다운로드와 분리되어 있으며 광고 클릭을 요구하지 않습니다.</p></details>
+      <details><summary>유튜브 다운로더와 인스타그램 다운로더를 따로 설치해야 하나요?</summary><p>아니요. AVOCADOSS는 웹브라우저에서 사용하는 도구이며, <a href="/youtube-downloader">유튜브 다운로드</a>, <a href="/instagram-reels-downloader">인스타그램 릴스 저장</a>, <a href="/threads-downloader">쓰레드 다운로드</a>를 같은 입력창에서 처리합니다. 공개적으로 접근 가능한 링크만 지원합니다.</p></details>
+      <details><summary>쓰레드 영상과 사진을 둘 다 다운로드할 수 있나요?</summary><p>공개 Threads 게시물이 영상이나 이미지를 제공하면 분석 결과에 해당 미디어가 따로 표시됩니다. 게시물 삭제나 접근 제한이 있는 경우에는 이용할 수 없습니다.</p></details>
+      <div class="freshness">안내 페이지 수정: 2026년 10월 17일</div>
     </div>
   </section>
 

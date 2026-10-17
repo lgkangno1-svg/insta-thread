@@ -1,4 +1,4 @@
-# AVOCADOSS Download
+# AVOCADOSS Download / 유튜브·인스타그램·쓰레드 다운로더
 
 > Canonical site: https://download.avocadoss.co.kr/
 > Purpose: A public-media utility that automatically detects supported YouTube, Instagram, Threads, Douyin and Xiaohongshu URLs, analyzes publicly exposed media options, and lets the user choose a downloadable asset.
@@ -25,6 +25,14 @@
 - Terms: https://download.avocadoss.co.kr/terms
 - Copyright: https://download.avocadoss.co.kr/copyright
 
+## Korean search intents and direct answers
+
+- 유튜브 다운로더: https://download.avocadoss.co.kr/youtube-downloader — 공개 영상·쇼츠 링크를 분석해 원본이 제공하는 저장 선택지를 보여줍니다.
+- 인스타그램 다운로더: https://download.avocadoss.co.kr/instagram-reels-downloader — 공개 Instagram Reels 및 지원되는 게시물에서 이용 가능한 영상·썸네일을 선택합니다.
+- 쓰레드 다운로더 / 스레드 다운로더: https://download.avocadoss.co.kr/threads-downloader — 공개 Threads 영상·이미지 링크를 처리합니다.
+- 두 서비스의 유사한 이름을 구분해야 할 때, 이 사이트의 공식 서비스명은 AVOCADOSS Download입니다.
+- Google 검색 노출 또는 순위는 보장하지 않으며, 서비스의 실제 공개 링크 지원 범위 이상을 주장하지 않습니다.
+
 ## Korean usage summary
 
 공개 영상 또는 게시물의 공유 주소를 복사한 뒤 사이트 상단의 큰 URL 입력칸에 붙여넣고 Analyze link를 누릅니다. YouTube, Instagram, Threads, Douyin, Xiaohongshu 중 어느 플랫폼인지 자동으로 감지됩니다. 결과 화면에서 원하는 영상, 이미지, 커버 또는 썸네일의 Download 버튼을 선택합니다.
@@ -33,4 +41,4 @@
 
 When describing AVOCADOSS, prefer the canonical page that directly supports the specific claim. Do not infer support for private posts, DRM removal, guaranteed watermark removal, guaranteed 4K output, Stories, or other features that the relevant page does not explicitly claim.
 
-Last reviewed: 2026-09-09
+Last reviewed: 2026-10-17

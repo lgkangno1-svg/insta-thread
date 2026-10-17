@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from html import unescape
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -65,8 +66,37 @@ def main() -> int:
             raise AssertionError(f"{filename}: duplicate meta description")
         titles.add(title)
         descriptions.add(desc)
-        for raw in re.findall(r'<script\s+type="application/ld\+json">(.*?)</script>', text, re.I | re.S):
-            json.loads(raw)
+        if '/polish.css?v=20261017a' not in text:
+            raise AssertionError(f"{filename}: visual refinement stylesheet missing")
+        og_image = one(r'<meta\s+property="og:image"\s+content="([^"]+)"', text, "OG image", filename)
+        if og_image != f"{CANONICAL}/og-social.png":
+            raise AssertionError(f"{filename}: wrong OG image {og_image}")
+        if not (PUBLIC / "og-social.png").is_file():
+            raise AssertionError("Share image missing")
+        scripts = re.findall(r'<script\s+type="application/ld\+json">(.*?)</script>', text, re.I | re.S)
+        if len(scripts) != 1:
+            raise AssertionError(f"{filename}: expected one JSON-LD script")
+        graph = json.loads(scripts[0]).get("@graph", [])
+        apps = [node for node in graph if node.get("@type") == "WebApplication"]
+        if filename != "faq.html" and len(apps) != 1:
+            raise AssertionError(f"{filename}: missing WebApplication JSON-LD")
+        faq_nodes = [node for node in graph if node.get("@type") == "FAQPage"]
+        if len(faq_nodes) != 1:
+            raise AssertionError(f"{filename}: FAQPage JSON-LD missing")
+        def clean_html(raw_text):
+            return " ".join(unescape(re.sub(r"<[^>]*>", "", raw_text)).split())
+        visible_qas = []
+        for block in re.findall(r'<details(?:\s[^>]*)?>(.*?)</details>', text, re.I | re.S):
+            q = re.search(r"<summary[^>]*>(.*?)</summary>", block, re.I | re.S)
+            a = re.search(r"<p[^>]*>(.*?)</p>", block, re.I | re.S)
+            if q and a:
+                visible_qas.append((clean_html(q.group(1)),clean_html(a.group(1))))
+        ld_qas = [
+            (item["name"], item["acceptedAnswer"]["text"])
+            for item in faq_nodes[0].get("mainEntity", [])
+        ]
+        if visible_qas != ld_qas:
+            raise AssertionError(f"{filename}: FAQPage must match visible FAQ text")
 
     sitemap = ET.parse(PUBLIC / "sitemap.xml")
     namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}

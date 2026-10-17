@@ -142,7 +142,7 @@
   const updateDetection = () => {
     const value = input.value.trim();
     if (!value) {
-      setDetection('Paste a link or the full copied share message — platform selection is automatic.');
+      setDetection('공개 공유 링크를 입력하면 플랫폼을 자동으로 감지합니다.');
       return;
     }
     const platform = detectFromUrl(value);
@@ -151,7 +151,7 @@
       const fromMessage = extracted && extracted !== value;
       setDetection(`${platformLabels[platform]} detected${fromMessage ? ' inside copied share text' : ' automatically'}`, platform);
     } else {
-      setDetection('Supported: YouTube, Instagram, Threads, Douyin and Xiaohongshu/RedNote public share links.');
+      setDetection('유튜브, 인스타그램, 쓰레드, 더우인, 샤오홍슈의 공개 링크를 지원합니다.');
     }
   };
 
@@ -210,7 +210,7 @@
           document.body.appendChild(a);
           a.click();
           a.remove();
-          setStatus('Download started. The temporary server copy is removed after delivery.');
+          setStatus('다운로드를 시작했습니다. 서버의 임시 파일은 전달 후 삭제됩니다.');
           return;
         }
         btn.textContent = job.status === 'processing' ? 'Preparing…' : 'Queued…';
@@ -281,17 +281,17 @@
     const url = extractSupportedUrl(raw);
     const detected = url ? platformFromCandidate(url) : '';
     if (!detected) {
-      setStatus('No supported public-media link was found in the pasted text.', true);
+      setStatus('지원하는 공개 영상·게시물 링크를 찾지 못했습니다. 공유 주소를 확인해 주세요.', true);
       input.focus();
       return;
     }
 
     if (raw !== url) input.value = url;
     button.disabled = true;
-    button.textContent = 'Analyzing…';
+    button.textContent = '분석 중…';
     result.classList.remove('show');
     assets.innerHTML = '';
-    setStatus('Analyzing the public share link…');
+    setStatus('공개 링크에서 이용 가능한 파일을 확인하고 있습니다…');
 
     try {
       const {data} = await requestJson('/api/v1/analyze', {
@@ -321,7 +321,7 @@
       setStatus(err.message || 'Could not analyze this link.', true);
     } finally {
       button.disabled = false;
-      button.textContent = 'Analyze link';
+      button.textContent = '링크 분석하기';
     }
   });
 
@@ -337,7 +337,7 @@
           input.focus();
         }
       } catch (_) {
-        setStatus('Clipboard access is blocked by the browser. Paste with Ctrl/Cmd+V instead.', true);
+        setStatus('브라우저가 클립보드 읽기를 차단했습니다. 입력창에 직접 붙여넣어 주세요.', true);
         input.focus();
       }
     });

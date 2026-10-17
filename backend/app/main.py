@@ -304,7 +304,7 @@ def _register_rootless_web() -> None:
         return serve_page
 
     for route, filename in pages.items():
-        app.add_api_route(route, make_page(filename), methods=["GET"], include_in_schema=False)
+        app.add_api_route(route, make_page(filename), methods=["GET", "HEAD"], include_in_schema=False)
     app.mount("/", StaticFiles(directory=str(web_root)), name="web-static")
 
 
