@@ -142,3 +142,7 @@ td{color:#c1cbd9;font-size:13px}
   .btn:active,.platform-guide:hover{transform:none}
   *{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* Deliberate line break preserves Korean keyword reading without an orphaned bullet. */
+.hero-line{display:block}
+.hero-break{display:none}
