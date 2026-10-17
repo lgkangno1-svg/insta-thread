@@ -67,6 +67,10 @@ def validate_asset_id(url: str, asset_id: str) -> None:
         if asset_id == "video:best" or re.fullmatch(r"thumbnail:\d+", asset_id):
             return
         raise HTTPException(status_code=400, detail="Invalid Douyin asset selection")
+    # YouTube analysis offers thumbnail assets. Accept those same IDs at job
+    # creation; the signed analysis token still restricts them to returned items.
+    if route.platform == "youtube" and re.fullmatch(r"thumbnail:\d+", asset_id):
+        return
     if re.fullmatch(r"video:(?:best|\d{3,4})", asset_id):
         return
     raise HTTPException(status_code=400, detail="Invalid asset selection for this platform")
