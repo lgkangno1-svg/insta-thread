@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 import re
 import shutil
 import socket
@@ -28,6 +29,25 @@ def _content_length(value: str | None) -> int:
 
 def cleanup_dir(path: str) -> None:
     shutil.rmtree(path, ignore_errors=True)
+
+
+def _make_job_tempdir(prefix: str, tmp_root: str | None) -> str:
+    """Use a valid scratch directory even if a long-lived worker cached a removed TMPDIR."""
+    try:
+        if tmp_root:
+            Path(tmp_root).mkdir(parents=True, exist_ok=True)
+        return tempfile.mkdtemp(prefix=prefix, dir=tmp_root or None)
+    except FileNotFoundError as exc:
+        # tempfile caches its default location. A system cleanup can delete that
+        # directory after the worker starts, leaving all subsequent jobs broken.
+        if not tmp_root and os.name == "posix" and Path("/tmp").is_dir():
+            try:
+                return tempfile.mkdtemp(prefix=prefix, dir="/tmp")
+            except OSError:
+                pass
+        raise HTTPException(status_code=503, detail="Download temporary storage is unavailable") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="Download temporary storage is unavailable") from exc
 
 
 def _assert_public_host(url: str) -> None:
@@ -89,8 +109,7 @@ def prepare_resolved_media(
     referer: str | None = None,
 ) -> tuple[Path, str]:
     _assert_public_host(source_url)
-    root = tmp_root or None
-    tmpdir = tempfile.mkdtemp(prefix="insta-thread-asset-", dir=root)
+    tmpdir = _make_job_tempdir(prefix="insta-thread-asset-", tmp_root=tmp_root)
     safe_ext = re.sub(r"[^a-zA-Z0-9]", "", ext or "bin")[:8] or "bin"
     path = Path(tmpdir) / f"download.{safe_ext}"
     max_bytes = max_size_mb * 1024 * 1024
@@ -147,8 +166,7 @@ def prepare_resolved_archive(
     for source_url, _ext in items:
         _assert_public_host(source_url)
 
-    root = tmp_root or None
-    tmpdir = tempfile.mkdtemp(prefix="insta-thread-archive-", dir=root)
+    tmpdir = _make_job_tempdir(prefix="insta-thread-archive-", tmp_root=tmp_root)
     safe_name = re.sub(r"[^a-zA-Z0-9._-]", "-", filename)[:96] or "download-images.zip"
     if not safe_name.lower().endswith(".zip"):
         safe_name += ".zip"
