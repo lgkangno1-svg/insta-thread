@@ -17,6 +17,15 @@ _IPHONE_UA = (
 )
 _AWEME_RE = re.compile(r"/(?:video|note|share/video)/(\d{15,22})(?:[/?#]|$)")
 _ROUTER_MARKER = "_ROUTER_DATA"
+_MOBILE_FEED_ENDPOINTS = (
+    "https://api5-normal-c-hl.amemv.com/aweme/v1/feed/",
+    "https://aweme.snssdk.com/aweme/v1/feed/",
+)
+_MOBILE_FEED_UA = (
+    "com.ss.android.ugc.aweme/290101 (Linux; U; Android 10; zh_CN; "
+    "Pixel 4; Build/QQ3A.200805.001; Cronet/TTNetVersion:5f9037be "
+    "2023-01-13 QuicVersion:4668bb42 2022-11-21)"
+)
 
 
 def _aweme_id(url: str) -> str:
@@ -169,6 +178,44 @@ def _extension(url: str, default: str) -> str:
     return suffix if suffix in {"jpg", "jpeg", "png", "webp", "mp4"} else default
 
 
+def _fetch_mobile_feed_item(aweme_id: str) -> dict[str, Any] | None:
+    """Use public Douyin mobile feed responses when share-page SSR has no media.
+
+    Require the exact requested ID and actual media fields; a generic
+    recommendation feed or unrelated cached item is not a valid resolution.
+    """
+    headers = {
+        "User-Agent": _MOBILE_FEED_UA,
+        "Accept": "application/json, text/plain, */*",
+    }
+    try:
+        with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0),
+                          follow_redirects=False, headers=headers) as client:
+            for endpoint in _MOBILE_FEED_ENDPOINTS:
+                try:
+                    response = client.get(endpoint, params={"aweme_id": aweme_id, "aid": "1128"})
+                    if response.status_code != 200:
+                        continue
+                    payload = response.json()
+                    if not isinstance(payload, dict):
+                        continue
+                    entries = payload.get("aweme_list") or []
+                    if not isinstance(entries, list):
+                        continue
+                    for item in entries:
+                        if not isinstance(item, dict):
+                            continue
+                        if str(item.get("aweme_id") or item.get("id") or "") != aweme_id:
+                            continue
+                        if _video_urls(item) or _cover_urls(item):
+                            return item
+                except (httpx.HTTPError, ValueError, TypeError):
+                    continue
+    except httpx.HTTPError:
+        return None
+    return None
+
+
 def _fetch_item(url: str) -> tuple[dict[str, Any], str]:
     aweme_id = _aweme_id(url)
     headers = {
@@ -182,14 +229,22 @@ def _fetch_item(url: str) -> tuple[dict[str, Any], str]:
         with httpx.Client(timeout=20, follow_redirects=True, headers=headers) as client:
             response = client.get(_share_page_url(aweme_id))
             response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read the public Douyin share page: {exc}") from exc
+        data = _extract_router_data(response.text)
+        item = _find_item(data, aweme_id)
+        if item and (_video_urls(item) or _cover_urls(item)):
+            return item, aweme_id
+    except (httpx.HTTPError, HTTPException):
+        pass
 
-    data = _extract_router_data(response.text)
-    item = _find_item(data, aweme_id)
-    if not item:
-        raise HTTPException(status_code=422, detail="The public Douyin page did not expose downloadable media")
-    return item, aweme_id
+    # Mobile feed is an independent public-source fallback. It provides
+    # media even when the mobile share page contains only template metadata.
+    item = _fetch_mobile_feed_item(aweme_id)
+    if item:
+        return item, aweme_id
+    raise HTTPException(
+        status_code=422,
+        detail="This public Douyin video did not expose downloadable media through available sources",
+    )
 
 
 def analyze(url: str) -> AnalyzeResponse:
