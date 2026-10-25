@@ -3,13 +3,13 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
 from ..models import AnalyzeResponse, MediaAsset
+from ..services.media_fetch import _make_job_tempdir
 from .cookie_support import cookie_file_path
 
 try:
@@ -159,7 +159,7 @@ def _cleanup(path: str) -> None:
 
 def prepare_video(url: str, asset_id: str, max_size_mb: int = 1000, tmp_root: str | None = None) -> tuple[Path, str]:
     _ensure_ytdlp()
-    tmpdir = tempfile.mkdtemp(prefix="insta-thread-", dir=tmp_root or None)
+    tmpdir = _make_job_tempdir(prefix="insta-thread-", tmp_root=tmp_root)
     outtmpl = str(Path(tmpdir) / "%(title).120B [%(id)s].%(ext)s")
     opts = _base_opts()
     opts.update(
