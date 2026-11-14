@@ -114,21 +114,21 @@ jobs:
           # do not make an otherwise healthy production build fail QA.
           [[ "$LIVE_SHA" == "$EXPECTED_SHA" ]]
           grep -Fxq 'https://download.avocadoss.co.kr/' qa/url.txt
-          grep -Fqi 'Social Media Downloader' qa/title.txt
+          grep -Eqi '다운로더|Downloader' qa/title.txt
           ! grep -Eqi 'Cloudflare Tunnel error|Error 1033|Bad gateway|Internal Server Error' qa/title.txt qa/snapshot-initial.txt
-          grep -Fq 'textbox "Public social media URL"' qa/snapshot-initial.txt
-          grep -Fq 'button "Analyze link"' qa/snapshot-initial.txt
+          grep -Eq 'textbox "(공개 SNS 영상 또는 게시물 주소|Public social media URL)"' qa/snapshot-initial.txt
+          grep -Eq 'button "(링크 분석하기|Analyze link)"' qa/snapshot-initial.txt
           grep -Fq '/stitch.css' qa/network-initial.txt
 
           agent-browser set viewport 1440 1000 >/dev/null
           agent-browser screenshot qa/desktop.png --full > qa/screenshot-desktop.txt 2>&1
 
           # Exercise the real form without downloading third-party media.
-          agent-browser find role textbox fill 'https://example.com/not-supported' --name 'Public social media URL' > qa/fill-invalid.txt 2>&1
-          agent-browser find role button click --name 'Analyze link' > qa/click-invalid.txt 2>&1
+          agent-browser find role textbox fill 'https://example.com/not-supported' --name '공개 SNS 영상 또는 게시물 주소' > qa/fill-invalid.txt 2>&1
+          agent-browser find role button click --name '링크 분석하기' > qa/click-invalid.txt 2>&1
           agent-browser wait 500 >/dev/null
           agent-browser get text '[data-status]' > qa/invalid-status.txt
-          grep -Eqi 'supported public(-media)?' qa/invalid-status.txt
+          grep -Eqi '지원하는 공개|supported public(-media)?' qa/invalid-status.txt
           agent-browser snapshot -i > qa/snapshot-after-invalid.txt
           agent-browser console > qa/console-after-invalid.txt 2>&1 || true
           agent-browser errors > qa/errors-after-invalid.txt 2>&1 || true
