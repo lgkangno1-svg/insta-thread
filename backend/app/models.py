@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-Platform = Literal["youtube", "instagram", "xiaohongshu", "threads", "douyin"]
+Platform = Literal["youtube", "instagram", "xiaohongshu", "threads", "douyin", "tiktok"]
 AssetKind = Literal["video", "thumbnail", "image", "archive"]
 MonetizationPlatform = Literal["download", "youtube", "instagram", "threads", "douyin", "xiaohongshu"]
 MonetizationEvent = Literal[

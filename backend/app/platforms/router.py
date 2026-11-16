@@ -45,13 +45,18 @@ _HOSTS: dict[str, PlatformRoute] = {
     "v.douyin.com": PlatformRoute("douyin", "douyin.com"),
     "iesdouyin.com": PlatformRoute("douyin", "douyin.com"),
     "www.iesdouyin.com": PlatformRoute("douyin", "douyin.com"),
+    "tiktok.com": PlatformRoute("tiktok", "tiktok.com"),
+    "www.tiktok.com": PlatformRoute("tiktok", "tiktok.com"),
+    "m.tiktok.com": PlatformRoute("tiktok", "tiktok.com"),
+    "vm.tiktok.com": PlatformRoute("tiktok", "tiktok.com"),
+    "vt.tiktok.com": PlatformRoute("tiktok", "tiktok.com"),
 }
 
 _HTTP_URL_RE = re.compile(r"https?://[^\s<>\"'`]+", re.IGNORECASE)
 _BARE_HOST_RE = re.compile(
-    r"(?<![\w@])(?:www\.|m\.|music\.|v\.)?(?:youtube\.com|instagram\.com|instagr\.am|"
+    r"(?<![\w@.])(?:www\.|m\.|music\.|v\.)?(?:youtube\.com|instagram\.com|instagr\.am|"
     r"xiaohongshu\.com|rednote\.com|xhslink\.com|xhslink\.cn|threads\.com|threads\.net|"
-    r"douyin\.com|iesdouyin\.com)/[^\s<>\"'`]+",
+    r"douyin\.com|iesdouyin\.com|tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)/[^\s<>\"'`]+",
     re.IGNORECASE,
 )
 _TRAILING_SHARE_PUNCTUATION = ".,;:!?，。；：！？、)]}>】》」』）”’"
