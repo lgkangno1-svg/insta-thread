@@ -37,6 +37,8 @@ def analyze(url: str):
         result = xiaohongshu_adapter.analyze(resolved_url)
     elif route.platform == "douyin":
         result = douyin_adapter.analyze(resolved_url)
+    elif route.platform == "tiktok":
+        result = ytdlp_adapter.analyze(resolved_url, route.platform, include_thumbnails=True)
     else:
         result = ytdlp_adapter.analyze(resolved_url, route.platform)
 
@@ -51,6 +53,10 @@ def analyze(url: str):
 
 def validate_asset_id(url: str, asset_id: str) -> None:
     route = detect_platform(url)
+    if route.platform == "tiktok":
+        if asset_id == "video:best" or re.fullmatch(r"thumbnail:\d+", asset_id):
+            return
+        raise HTTPException(status_code=400, detail="Invalid TikTok asset selection")
     if route.platform == "threads":
         if not re.fullmatch(r"asset:\d+", asset_id):
             raise HTTPException(status_code=400, detail="Invalid Threads asset selection")
@@ -69,7 +75,7 @@ def validate_asset_id(url: str, asset_id: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid Douyin asset selection")
     # YouTube analysis offers thumbnail assets. Accept those same IDs at job
     # creation; the signed analysis token still restricts them to returned items.
-    if route.platform == "youtube" and re.fullmatch(r"thumbnail:\d+", asset_id):
+    if route.platform in {"youtube", "tiktok"} and re.fullmatch(r"thumbnail:\d+", asset_id):
         return
     if re.fullmatch(r"video:(?:best|\d{3,4})", asset_id):
         return

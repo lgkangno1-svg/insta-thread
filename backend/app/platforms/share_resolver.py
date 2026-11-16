@@ -24,16 +24,22 @@ _ALLOWED_REDIRECT_HOSTS: dict[str, set[str]] = {
         "douyin.com", "www.douyin.com", "m.douyin.com", "v.douyin.com",
         "iesdouyin.com", "www.iesdouyin.com",
     },
+    "tiktok": {
+        "tiktok.com", "www.tiktok.com", "m.tiktok.com",
+        "vm.tiktok.com", "vt.tiktok.com",
+    },
 }
 
 _RESOLVE_HOSTS = {
     "instagr.am", "www.instagr.am",
     "xhslink.com", "www.xhslink.com", "xhslink.cn", "www.xhslink.cn",
     "v.douyin.com", "iesdouyin.com", "www.iesdouyin.com",
+    "vm.tiktok.com", "vt.tiktok.com",
 }
 _RESOLVE_PATH_PREFIXES = {
     "instagram": ("/share/",),
     "threads": ("/share/", "/t/"),
+    "tiktok": ("/t/",),
 }
 
 _MEDIA_PATHS: dict[str, tuple[re.Pattern[str], ...]] = {
@@ -50,6 +56,7 @@ _MEDIA_PATHS: dict[str, tuple[re.Pattern[str], ...]] = {
         re.compile(r"^/(?:video|note)/\d{15,22}/?$", re.I),
         re.compile(r"^/share/video/\d{15,22}/?$", re.I),
     ),
+    "tiktok": (re.compile(r"^/@[^/]+/video/\d{15,22}/?$", re.I),),
 }
 
 
@@ -134,7 +141,8 @@ def resolve_share_url(value: str) -> str:
             timeout=20,
             follow_redirects=False,
             headers=_request_headers(route.platform),
-            cookies=httpx_guest_cookies(),
+            # Public TikTok share links must not reuse configured account cookies.
+            cookies={} if route.platform == "tiktok" else httpx_guest_cookies(),
         ) as client:
             for _ in range(7):
                 response = client.get(current)

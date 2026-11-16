@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any
 
 from fastapi import HTTPException
@@ -21,7 +22,7 @@ except ImportError:  # pragma: no cover - startup/dev environment aid
 VIDEO_HEIGHTS = (2160, 1440, 1080, 720, 480, 360)
 
 
-def _base_opts() -> dict[str, Any]:
+def _base_opts(url: str = '') -> dict[str, Any]:
     # Keep extractor behavior deterministic and avoid playlists from accidental URLs.
     opts: dict[str, Any] = {
         "quiet": True,
@@ -40,7 +41,25 @@ def _base_opts() -> dict[str, Any]:
         opts["extractor_args"] = {
             "youtubepot-bgutilhttp": {"base_url": [pot_url]},
         }
-    cookie_file = cookie_file_path()
+    # TikTok public-post extraction never inherits account cookies configured
+    # for unrelated platforms. Do not silently turn public-only extraction into
+    # an authenticated private/session workflow.
+    host = (urlsplit(url).hostname or "").lower()
+    public_tiktok = host in {"tiktok.com", "www.tiktok.com", "m.tiktok.com"}
+    if public_tiktok:
+        # TikTok public video pages currently return an empty/invalid response
+        # to yt-dlp's default UA. A standard browser UA works without login
+        # cookies or third-party extraction providers (MiniPC E2E verified).
+        # Do not copy credentials configured for another platform.
+        opts["http_headers"] = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/140.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+    cookie_file = None if public_tiktok else cookie_file_path()
     if cookie_file is not None:
         opts["cookiefile"] = str(cookie_file)
     return opts
@@ -54,7 +73,7 @@ def _ensure_ytdlp() -> None:
 def _extract(url: str) -> dict[str, Any]:
     _ensure_ytdlp()
     try:
-        with yt_dlp.YoutubeDL(_base_opts()) as ydl:
+        with yt_dlp.YoutubeDL(_base_opts(url)) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as exc:  # yt-dlp has many extractor-specific subclasses
         raise HTTPException(status_code=422, detail=f"Could not analyze this media: {exc}") from exc
@@ -161,7 +180,7 @@ def prepare_video(url: str, asset_id: str, max_size_mb: int = 1000, tmp_root: st
     _ensure_ytdlp()
     tmpdir = _make_job_tempdir(prefix="insta-thread-", tmp_root=tmp_root)
     outtmpl = str(Path(tmpdir) / "%(title).120B [%(id)s].%(ext)s")
-    opts = _base_opts()
+    opts = _base_opts(url)
     opts.update(
         {
             "skip_download": False,
